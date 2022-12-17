@@ -13,7 +13,8 @@ use parquet::{
         reader::SerializedFileReader,
         reader::FileReader
     },
-    schema::parser::parse_message_type,
+    schema::{parser::parse_message_type,
+        types::Type}
 };
 // for reader
 // use parquet::{
@@ -334,6 +335,16 @@ pub fn write_parquet(path: &Path, num_recs: Option<u64>, group_size: Option<u64>
 
 const SHOW_FIRST_GROUP_ONLY: bool = true;
 
+fn print_schema(schema: &Type) {
+    for (idx, fld) in schema.get_fields().iter().enumerate() {
+        println!("idx={}   {:?}", &idx, &fld);
+        let nme = fld.get_basic_info().name();
+        let convType = fld.get_basic_info().converted_type();
+        let physType = fld.get_physical_type();
+        println!("idx={}   name={}, convType={} and physicalType={}", &idx, &nme, &convType, &physType);
+    }
+}
+
 pub fn read_parquet_metadata(path: &Path) {
     if let Ok(file) = fs::File::open(path) {
 
@@ -343,6 +354,13 @@ pub fn read_parquet_metadata(path: &Path) {
 
         println!("For path={:?} found file-metadata:\n {:?}", &path, &file_metadata);
 
+        {
+            let schema = file_metadata.schema();
+            println!(" Schema = {:?}  of type {}", &schema, crate::type_of(&schema));
+
+            print_schema(schema);
+
+        }
 //        let rows = file_metadata.num_rows();
         
         for (idx, rg) in parquet_metadata.row_groups().iter().enumerate() {

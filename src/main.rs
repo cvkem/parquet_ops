@@ -59,7 +59,7 @@ fn main() {
         "read" => {
 //            let acc_name = Some(if args.len() > 2 { args[2].to_owned() } else { "aafqlr".to_owned() }); // exists at end of file with 1_000_000 records.
 //            block_on(read_parquet(&path, acc_name));
-        read_parquet_rowiter(None, MESSAGE_TYPE);
+        read_parquet_rowiter(path1, None, MESSAGE_TYPE);
         }
         _ => panic!("Unknown action: expecting 'write', 'meta', or 'read' as first argument. Found action: '{action}'")
     }
