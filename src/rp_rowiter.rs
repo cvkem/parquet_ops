@@ -57,52 +57,132 @@ pub fn read_parquet_rowiter(path: &Path, max_rows: Option<usize>, message_type: 
     println!("iterated over {last_idx}  fields with total amount = {sum}");
 }
 
+struct RowIterExt<'a> {
+    row_iter: RowIter<'a>,
+    metadata: ParquetMetaData,
+    head: Option<Row>
+}
 
-pub fn merge_parquet(path_1: &Path, path_2: &Path, smaller: fn(&Row, &Row) -> bool) {
-    if let Some((row_iter_1, parquet_meta_1)) = get_parquet_iter(path_1, None) {
-        if let Some((row_iter_2, parquet_meta_2)) = get_parquet_iter(path_2, None) {
+impl<'a> RowIterExt<'a> {
+    fn new(path: &'a Path) -> Self {
+        if let Some((mut row_iter, metadata)) = get_parquet_iter(path, None) {
 
-            let mut row_iters = vec![row_iter_1, row_iter_2];
-            let mut heads = Vec::new();
-            row_iters.iter_mut().for_each(|ri| heads.push(ri.next()));
-
-            loop {
-                let min_pos = heads.iter().enumerate().fold(None, 
-                    |acc: Option<(usize, &Row)>, (idx, val)| {
-
-                        if let Some(val) = val {
-                            if let Some(acc) = acc {
-                                if smaller(val, acc.1) {
-                                    Some((idx, val))
-                                } else {
-                                    Some(acc)
-                                }
-                            } else {
-                                Some((idx, val))
-                            }
-                        } else {
-                            acc
-                        }
-                    });
-
-                    if min_pos.is_none() {
-                        break;
-                    }
-                let (idx, val) = min_pos.unwrap();
-
-                println!("Next element from iter:{idx} having value id={}, acc={} and amount={}.", val.get_long(0).unwrap(), val.get_string(1).unwrap(), val.get_int(2).unwrap());
-
-                // advance the right row-iter
-                heads[idx] = row_iters[idx].next();
-
+            let head = row_iter.next();
+            RowIterExt {
+                row_iter,
+                metadata,
+                head
             }
         } else {
-            panic!("Failed to read file-2.")
+            panic!("Failed to create iterator for {}", path.display());
         }
-
-    } else {
-        panic!("Failed to read file-1.")
     }
 
+    fn update_head (&mut self) -> bool {
+        self.head = self.row_iter.next();
+        self.head.is_some()
+    }
+
+    fn drain(&mut self, row_proc: fn(row: &Row)) {
+        row_proc(&self.head.as_ref().unwrap());
+        while self.update_head() {
+            row_proc(&self.head.as_ref().unwrap())
+        }
+
+    }
 }
+
+
+
+pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
+
+    let row_processor = |row: &Row| {
+        println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap());
+    };
+
+    let mut row_iters: Vec<RowIterExt> = paths
+                .iter()
+                .map(|p| RowIterExt::new(p))
+                .filter(|rie| rie.head.is_some())
+                .collect();
+
+    loop {
+        match row_iters.len() {
+            0 => break,  // we are ready
+            1 => {
+                    row_iters[0].drain(row_processor);
+                    row_iters.remove(0);
+            },
+            _ => {
+                if let Some((min_pos, _)) = row_iters
+                        .iter()
+                        .enumerate()
+                        .reduce(|acc, other| {
+                            if smaller(&acc.1.head.as_ref().unwrap(), &other.1.head.as_ref().unwrap()) {
+                                acc
+                            } else {
+                                other
+                            }
+                        }) {
+                    row_processor(&row_iters[min_pos].head.as_ref().unwrap());
+                    if row_iters[min_pos].update_head() == false {
+                        let _ = row_iters.swap_remove(min_pos);
+                    }
+                } else {
+                    panic!("Could not find element while row_iters is not empty.")
+                }
+            }
+        }
+    }
+}
+
+
+
+// pub fn merge_parquet(path_1: &Path, path_2: &Path, smaller: fn(&Row, &Row) -> bool) {
+//     if let Some((row_iter_1, parquet_meta_1)) = get_parquet_iter(path_1, None) {
+//         if let Some((row_iter_2, parquet_meta_2)) = get_parquet_iter(path_2, None) {
+
+//             let mut row_iters = vec![row_iter_1, row_iter_2];
+//             let mut heads = Vec::new();
+//             row_iters.iter_mut().for_each(|ri| heads.push(ri.next()));
+
+//             loop {
+//                 let min_pos = heads.iter().enumerate().fold(None, 
+//                     |acc: Option<(usize, &Row)>, (idx, val)| {
+
+//                         if let Some(val) = val {
+//                             if let Some(acc) = acc {
+//                                 if smaller(val, acc.1) {
+//                                     Some((idx, val))
+//                                 } else {
+//                                     Some(acc)
+//                                 }
+//                             } else {
+//                                 Some((idx, val))
+//                             }
+//                         } else {
+//                             acc
+//                         }
+//                     });
+
+//                     if min_pos.is_none() {
+//                         break;
+//                     }
+//                 let (idx, val) = min_pos.unwrap();
+
+//                 println!("Next element from iter:{idx} having value id={}, acc={} and amount={}.", val.get_long(0).unwrap(), val.get_string(1).unwrap(), val.get_int(2).unwrap());
+
+//                 // advance the right row-iter
+//                 heads[idx] = row_iters[idx].next();
+
+//             }
+//         } else {
+//             panic!("Failed to read file-2.")
+//         }
+
+//     } else {
+//         panic!("Failed to read file-1.")
+//     }
+
+// }
 

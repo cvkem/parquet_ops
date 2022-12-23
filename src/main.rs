@@ -64,7 +64,7 @@ fn main() {
             // write_parquet(&path_2, num_recs, group_size, Some(|i| i % 2 != 0)).unwrap();        
         },
         "meta" => read_parquet_metadata(&path_1),
-        "merge" => merge_parquet(path_1, path_2, smaller_test),
+        "merge" => merge_parquet(vec![path_1, path_2], smaller_test),
         "read" => {
 //            let acc_name = Some(if args.len() > 2 { args[2].to_owned() } else { "aafqlr".to_owned() }); // exists at end of file with 1_000_000 records.
 //            block_on(read_parquet(&path, acc_name));
