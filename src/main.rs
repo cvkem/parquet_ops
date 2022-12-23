@@ -50,10 +50,11 @@ fn main() {
             let num_recs = if args.len() > 2 { get_u64_from_string(&args[2], "first argument should be 'num_recs' (a positive integer).") } else { None };
             let group_size = if args.len() > 3 { get_u64_from_string(&args[3], "second argument should be 'group_size' (a positive integer).") } else { None };
         
-            println!("Creating file in {:?}", &path1);        
+            println!("Creating file in {:?}", &path1);     
             write_parquet(&path1, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap();        
-            println!("Creating file in {:?}", &path2);        
-            write_parquet(&path2, num_recs, group_size, Some(|i| i % 2 != 0)).unwrap();        
+            // write_parquet(&path1, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap();        
+            // println!("Creating file in {:?}", &path2);        
+            // write_parquet(&path2, num_recs, group_size, Some(|i| i % 2 != 0)).unwrap();        
         },
         "meta" => read_parquet_metadata(&path1),
         "read" => {

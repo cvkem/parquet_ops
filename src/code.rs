@@ -43,9 +43,11 @@ const NESTED: bool = false;
 
 pub const MESSAGE_TYPE: &str = "
 message schema {
-  REQUIRED BINARY account (UTF8);
-  REQUIRED INT32 amount;
-} 
+    REQUIRED INT64 id;
+    REQUIRED BINARY account (UTF8);
+    REQUIRED INT32 amount;
+    REQUIRED INT64 datetime (TIMESTAMP(MILLIS,true));
+    REQUIRED BINARY garbage_00 (UTF8);} 
 ";
 
 // const NESTED_MESSAGE_TYPE: &str = "
@@ -299,7 +301,7 @@ fn write_parquet_row_group(writer: &mut SerializedFileWriter<fs::File>,
 
 pub fn write_parquet(path: &Path, num_recs: Option<u64>, group_size: Option<u64>,
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
-    let message_type = if NESTED {LONG_NESTED_MESSAGE_TYPE} else {LONG_MESSAGE_TYPE};
+    let message_type = if NESTED {LONG_NESTED_MESSAGE_TYPE} else {MESSAGE_TYPE};
     let schema = Arc::new(parse_message_type(message_type).unwrap());
     let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
