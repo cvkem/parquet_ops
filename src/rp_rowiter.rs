@@ -137,7 +137,7 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
 }
 
 
-
+// // The more imperative (and less general) implementation. Complex due to the deeply nested if-then
 // pub fn merge_parquet(path_1: &Path, path_2: &Path, smaller: fn(&Row, &Row) -> bool) {
 //     if let Some((row_iter_1, parquet_meta_1)) = get_parquet_iter(path_1, None) {
 //         if let Some((row_iter_2, parquet_meta_2)) = get_parquet_iter(path_2, None) {

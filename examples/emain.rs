@@ -12,15 +12,13 @@ fn type_of<T>(_: &T) -> &'static str {
     type_name::<T>()
 }
 
+extern crate parquet_exp;
 
 
+//use crate::rp_rowiter::{read_parquet_rowiter, merge_parquet};
+use parquet_exp::{read_parquet_rowiter, merge_parquet};
 
-
-mod rp_rowiter;
-use crate::rp_rowiter::{read_parquet_rowiter, merge_parquet};
-
-mod code;
-use crate::code::{
+use parquet_exp::{
     MESSAGE_TYPE,
     read_parquet_metadata,
     write_parquet};

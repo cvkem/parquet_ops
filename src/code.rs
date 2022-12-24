@@ -1,4 +1,5 @@
 use std::{ 
+    any::type_name,
     cmp,
 //    env, 
     fs, path::Path, sync::Arc, 
@@ -39,81 +40,15 @@ use parquet::{
 // use parquet::arrow::arrow_reader::ArrowReaderOptions;
 
 
+
+// return the type of a ref as a static string
+fn type_of<T>(_: &T) -> &'static str {
+    type_name::<T>()
+}
+
 const NESTED: bool = false;
 
-pub const MESSAGE_TYPE: &str = "
-message schema {
-    REQUIRED INT64 id;
-    REQUIRED BINARY account (UTF8);
-    REQUIRED INT32 amount;
-    REQUIRED INT64 datetime (TIMESTAMP(MILLIS,true));
-    REQUIRED BINARY garbage_00 (UTF8);} 
-";
-
-// const NESTED_MESSAGE_TYPE: &str = "
-// message schema {
-//   REQUIRED BINARY account (UTF8);
-//   REPEATED INT32 amount;
-// }
-// ";
-
-pub const LONG_MESSAGE_TYPE: &str = "
-message schema {
-  REQUIRED INT64 id;
-  REQUIRED BINARY account (UTF8);
-  REQUIRED INT32 amount;
-  REQUIRED INT64 datetime (TIMESTAMP(MILLIS,true));
-  REQUIRED BINARY garbage_00 (UTF8);
-  REQUIRED BINARY garbage_01 (UTF8);
-  REQUIRED BINARY garbage_02 (UTF8);
-  REQUIRED BINARY garbage_03 (UTF8);
-  REQUIRED BINARY garbage_04 (UTF8);
-  REQUIRED BINARY garbage_05 (UTF8);
-  REQUIRED BINARY garbage_06 (UTF8);
-  REQUIRED BINARY garbage_07 (UTF8);
-  REQUIRED BINARY garbage_08 (UTF8);
-  REQUIRED BINARY garbage_09 (UTF8);
-  REQUIRED BINARY garbage_10 (UTF8);
-  REQUIRED BINARY garbage_11 (UTF8);
-  REQUIRED BINARY garbage_12 (UTF8);
-  REQUIRED BINARY garbage_13 (UTF8);
-  REQUIRED BINARY garbage_14 (UTF8);
-  REQUIRED BINARY garbage_15 (UTF8);
-  REQUIRED BINARY garbage_16 (UTF8);
-  REQUIRED BINARY garbage_17 (UTF8);
-  REQUIRED BINARY garbage_18 (UTF8);
-  REQUIRED BINARY garbage_19 (UTF8);
-}
-";
-
-pub const LONG_NESTED_MESSAGE_TYPE: &str = "
-message schema {
-  REQUIRED BINARY account (UTF8);
-  REPEATED INT32 amount;
-  REPEATED BINARY garbage_00 (UTF8);
-  REPEATED BINARY garbage_01 (UTF8);
-  REPEATED BINARY garbage_02 (UTF8);
-  REPEATED BINARY garbage_03 (UTF8);
-  REPEATED BINARY garbage_04 (UTF8);
-  REPEATED BINARY garbage_05 (UTF8);
-  REPEATED BINARY garbage_06 (UTF8);
-  REPEATED BINARY garbage_07 (UTF8);
-  REPEATED BINARY garbage_08 (UTF8);
-  REPEATED BINARY garbage_09 (UTF8);
-  REPEATED BINARY garbage_10 (UTF8);
-  REPEATED BINARY garbage_11 (UTF8);
-  REPEATED BINARY garbage_12 (UTF8);
-  REPEATED BINARY garbage_13 (UTF8);
-  REPEATED BINARY garbage_14 (UTF8);
-  REPEATED BINARY garbage_15 (UTF8);
-  REPEATED BINARY garbage_16 (UTF8);
-  REPEATED BINARY garbage_17 (UTF8);
-  REPEATED BINARY garbage_18 (UTF8);
-  REPEATED BINARY garbage_19 (UTF8);
-}
-";
-
-
+use super::ttypes;
 
 const NUM_TX_PER_ACCOUNT: u64 = 10;
 
@@ -301,7 +236,7 @@ fn write_parquet_row_group(writer: &mut SerializedFileWriter<fs::File>,
 
 pub fn write_parquet(path: &Path, num_recs: Option<u64>, group_size: Option<u64>,
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
-    let message_type = if NESTED {LONG_NESTED_MESSAGE_TYPE} else {MESSAGE_TYPE};
+    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else {ttypes::MESSAGE_TYPE};
     let schema = Arc::new(parse_message_type(message_type).unwrap());
     let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
@@ -358,7 +293,7 @@ pub fn read_parquet_metadata(path: &Path) {
 
         {
             let schema = file_metadata.schema();
-            println!(" Schema = {:?}  of type {}", &schema, crate::type_of(&schema));
+            println!(" Schema = {:?}  of type {}", &schema, type_of(&schema));
 
             print_schema(schema);
 
