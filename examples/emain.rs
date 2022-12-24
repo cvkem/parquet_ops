@@ -1,6 +1,7 @@
 use std::{ 
     env, 
-    fs, path::Path, 
+    fs, 
+    path::Path, 
     io::Read};
 use std::time::Instant;
 use std::any::type_name;
@@ -12,7 +13,10 @@ fn type_of<T>(_: &T) -> &'static str {
     type_name::<T>()
 }
 
-extern crate parquet_exp;
+// only needed for Rust 2015
+//extern crate parquet_exp;
+
+mod paths;
 
 
 //use crate::rp_rowiter::{read_parquet_rowiter, merge_parquet};
@@ -43,8 +47,8 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    let path_1 = Path::new("./sample_even.parquet");
-    let path_2 = Path::new("./sample_odd.parquet");
+    let path_1 = Path::new(paths::PATH_1);
+    let path_2 = Path::new(paths::PATH_2);
 
     let action = if args.len() > 1 { args[1].to_owned() } else { "write".to_owned() };
 
