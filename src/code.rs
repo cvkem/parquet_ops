@@ -1,9 +1,10 @@
 use std::{ 
     any::type_name,
     cmp,
-//    env, 
-    fs, path::Path, sync::Arc, 
-    io::self};
+    fs,
+    io,
+    path::Path, 
+    sync::Arc};
 use std::time::Instant;
 use parquet::{
     basic::Compression,
@@ -293,7 +294,7 @@ pub fn read_parquet_metadata(path: &Path) {
 
         {
             let schema = file_metadata.schema();
-            println!(" Schema = {:?}  of type {}", &schema, type_of(&schema));
+            println!(" Schema = {:#?}  of type {}", &schema, type_of(&schema));
 
             print_schema(schema);
 
@@ -301,7 +302,7 @@ pub fn read_parquet_metadata(path: &Path) {
 //        let rows = file_metadata.num_rows();
         
         for (idx, rg) in parquet_metadata.row_groups().iter().enumerate() {
-            println!("  rowgroup: {} has meta {:?}", idx, rg);
+            println!("  rowgroup: {} has meta {:#?}", idx, rg);
             if SHOW_FIRST_GROUP_ONLY {
                 println!(" {} groups in total, but only first shown.", parquet_metadata.row_groups().len());
                 break;
@@ -310,7 +311,7 @@ pub fn read_parquet_metadata(path: &Path) {
 
         let fields = parquet_metadata.file_metadata().schema().get_fields();
 
-        println!("And fields:\n{:?}", &fields)
+        println!("\nAnd fields:\n{:#?}", &fields)
     } else {
         println!("Failed to open file {:?}", path);
     }
