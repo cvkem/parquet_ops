@@ -11,10 +11,13 @@ use super::rowiterext::RowIterExt;
 
 pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
 
-    let row_processor = |row: &Row| {
+    let mut merged_rows = Vec::new();
+
+    let mut row_processor = |row: Row| {
         if row.get_long(0).unwrap() % 10000 == 0 {
             println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap());
         }
+        merged_rows.push(row);
     };
 
     let mut row_iters: Vec<RowIterExt> = paths
@@ -27,7 +30,7 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
         match row_iters.len() {
             0 => break,  // we are ready
             1 => {
-                    row_iters[0].drain(row_processor);
+                    row_iters[0].drain(&mut row_processor);
                     row_iters.remove(0);
             },
             _ => {
@@ -41,8 +44,9 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
                                 other
                             }
                         }) {
-                    row_processor(&row_iters[min_pos].head().as_ref().unwrap());
-                    if row_iters[min_pos].update_head() == false {
+                    let (head, ready) = row_iters[min_pos].update_head();         
+                    row_processor(head);
+                    if  ready {
                         let _ = row_iters.swap_remove(min_pos);
                     }
                 } else {
@@ -51,6 +55,15 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
             }
         }
     }
+
+
+    const last_n: usize = 5;
+    println!("\nShowing last {last_n} rows");
+    merged_rows.into_iter()
+        .rev()
+        .take(last_n)
+        .rev()
+        .for_each(|row| println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap()))
 }
 
 

@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    mem,
+    path::Path
+};
 use parquet::{
         file::{reader::{SerializedFileReader, FileReader}, metadata::ParquetMetaData},
         schema::parser::parse_message_type,
@@ -58,9 +61,9 @@ impl<'a> RowIterExt<'a> {
         }
     }
 
-    pub fn next(&mut self) -> Option<Row> {
-        self.row_iter.next()
-    }
+    // pub fn next(&mut self) -> Option<Row> {
+    //     self.row_iter.next()
+    // }
 
     pub fn metadata(&self) -> &ParquetMetaData {
         &self.metadata
@@ -70,22 +73,23 @@ impl<'a> RowIterExt<'a> {
         &self.head
     }
 
-    pub fn update_head (&mut self) -> bool {
-        self.head = self.row_iter.next();
-        self.head.is_some()
+    pub fn update_head (&mut self) -> (Row, bool) {
+        let mut head = self.row_iter.next();
+        mem::swap(&mut self.head, &mut head);
+        (head.unwrap(), self.head.is_none())
     }
 
-    pub fn drain(&mut self, row_proc: fn(row: &Row)) {
-        row_proc(&self.head.as_ref().unwrap());
-        while self.update_head() {
-            row_proc(&self.head.as_ref().unwrap())
+    pub fn drain<F>(&mut self, row_proc: &mut F) where
+        F: FnMut(Row) {
+        loop {
+            let (head, ready) = self.update_head();
+            row_proc(head);
+            if ready {
+                break;
+            }
         }
 
     }
-
-    
-
-
 }
 
 
