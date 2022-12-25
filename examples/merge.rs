@@ -28,8 +28,8 @@ fn smaller_test(row_1: &Row, row_2: &Row) -> bool {
 
 
 fn main() {
-
     let action = env::args().next().unwrap_or("UNKNOWN".to_owned());
+
     let path_1 = Path::new(paths::PATH_1);
     let path_2 = Path::new(paths::PATH_2);
 
