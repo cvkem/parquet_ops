@@ -22,6 +22,8 @@ use super::ttypes;
 
 
 
+
+
 pub struct RowWriter<W: Write>{
     max_row_group: usize,
     row_writer: SerializedFileWriter<W>,
@@ -32,7 +34,7 @@ pub struct RowWriter<W: Write>{
 
 
 impl<W: Write> RowWriter::<W> {
-    pub fn new(path: &Path, schema: Arc<Type>, num_recs: u64, group_size: usize) -> Result<RowWriter<fs::File>> {
+    pub fn new(path: &Path, schema: Arc<Type>, group_size: usize) -> Result<RowWriter<fs::File>> {
         let props = Arc::new(WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build());
@@ -98,12 +100,28 @@ impl<W: Write> RowWriter::<W> {
     }
 
 
-    pub fn close() {
-
+    // Close does not consume the writer. 
+    // Possibly does this work well when combined with a drop trait?
+    pub fn close(mut self)  {
+        if self.buffer.len() > 0 {
+            if let Err(err) = self.flush() {
+                panic!("auto-Flush on close failed with {err}");
+            }
+        }
+        self.row_writer.close();
     }
-
 }
 
+
+// // failed to implement drop as it requires and owned value
+// impl<W> Drop for RowWriter<W> where 
+//     W: Write {
+//     fn drop(&mut self) {
+//         self.close();
+//     }
+// }
+
+// implementations of the columns-writers are implemented as private functions.
 
 
 fn write_i64_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
@@ -135,3 +153,53 @@ fn write_utf8_column(rows: Iter<Row>, idx: usize, col_writer: &mut SerializedCol
 }
 
 
+
+// #[cfg(test)]
+// pub mod tests {
+
+//     use std::{
+//         path::Path,
+//         sync::Arc};
+//     use parquet::{
+//         basic::Compression,
+//         data_type::{Int32Type, Int64Type, ByteArrayType, ByteArray},
+//         file::{
+//             properties::WriterProperties,
+//             writer::SerializedFileWriter,
+//             reader::SerializedFileReader,
+//             reader::FileReader
+//         },
+//         record::{Row, 
+//             api::{Field, make_row}},
+//         schema::{parser::parse_message_type,
+//             types::Type}
+//     };
+//     use crate::RowWriter;
+
+
+//     #[test]
+//     fn test_write_parquet() {
+//         const MESSAGE_TYPE: &str = "
+//         message schema {
+//             REQUIRED INT64 id;
+//             REQUIRED BINARY account (UTF8);
+//         ";
+//         let input_tuples = vec![(1_i64, "Hello"), (2_i64, "World")];
+
+//         let tuple_to_row = |(id, account)|  vec![("id", Field.Long(id)), ("account", Field.Str(account))]; 
+//         let input_rows = make_row(input_tuples.into_iter().map(tuple_to_row).collect()); 
+
+
+//         let path = Path::new("/tmp/test_write_parquet.parquet");
+//         let schema = Arc::new(parse_message_type(MESSAGE_TYPE).unwrap());
+
+//         let row_writer = RowWriter::new(path, schema, 10).unwrap();
+
+//         for row in input_rows {
+//             row_writer.append_row(row);
+//         }
+//         row_writer.close();
+
+//     }
+
+// }
