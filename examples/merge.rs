@@ -2,8 +2,8 @@ use std::{
     env,
     fs, 
     path::Path, 
-    io::Read};
-use std::time::Instant;
+    io::Read,
+    time::Instant};
 use std::any::type_name;
 use parquet::record::{Row,
     RowAccessor};

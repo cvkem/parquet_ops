@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    fs,
+    path::Path,
+    sync::Arc};
 use parquet::{
 //        file::{reader::{SerializedFileReader, FileReader}, metadata::ParquetMetaData},
 //        schema::parser::parse_message_type,
@@ -8,23 +11,32 @@ use parquet::{
 };
 
 use super::rowiterext::RowIterExt;
+use super::writer::RowWriter;
+
 
 pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
 
-    let mut merged_rows = Vec::new();
+//    let mut merged_rows = Vec::new();
+
+    let mut row_iters: Vec<RowIterExt> = paths
+    .iter()
+    .map(|p| RowIterExt::new(p))
+    .filter(|rie| rie.head().is_some())
+    .collect();
+
+    if row_iters.len() < 1 {
+        panic!("Nothing to merge");
+    }
+    let schema = Arc::new(row_iters[0].metadata().file_metadata().schema().clone());
+    let mut row_writer = RowWriter::<fs::File>::new(Path::new("merged.parquet"), schema, 10000).unwrap();
 
     let mut row_processor = |row: Row| {
         if row.get_long(0).unwrap() % 10000 == 0 {
             println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap());
         }
-        merged_rows.push(row);
+        row_writer.append_row(row);
+//        merged_rows.push(row);
     };
-
-    let mut row_iters: Vec<RowIterExt> = paths
-                .iter()
-                .map(|p| RowIterExt::new(p))
-                .filter(|rie| rie.head().is_some())
-                .collect();
 
     loop {
         match row_iters.len() {
@@ -56,14 +68,14 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
         }
     }
 
-
-    const last_n: usize = 5;
-    println!("\nShowing last {last_n} rows");
-    merged_rows.into_iter()
-        .rev()
-        .take(last_n)
-        .rev()
-        .for_each(|row| println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap()))
+    // const last_n: usize = 5;
+    // println!("\nShowing last {last_n} rows");
+    // merged_rows.into_iter()
+    //     .rev()
+    //     .take(last_n)
+    //     .rev()
+    //     .for_each(|row| println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap()))
+    row_writer.close();
 }
 
 
