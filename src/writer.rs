@@ -5,7 +5,8 @@ use std::{
     path::Path,
     slice::Iter,
     sync::{Arc, Mutex},
-    time::{Instant, Duration}, any::type_name
+    thread,
+    time::{self, Instant, Duration}, any::type_name
 };
 use parquet::{
     basic::{Compression, ConvertedType, Type as PhysicalType},
@@ -26,9 +27,10 @@ use super::ttypes;
 enum FlushStatus {
     None, 
     Running, 
-    Ready(Result<Duration>)
+//    Ready(Result<Duration>)
 }
 
+const TWO_THREADED: bool = false;
 
 pub struct RowWriter<W: Write>{
     max_row_group: usize,
@@ -41,7 +43,7 @@ pub struct RowWriter<W: Write>{
 }
 
 
-impl<W: Write> RowWriter::<W> {
+impl<W: Write + std::marker::Send> RowWriter::<W> {
     pub fn new(path: &Path, schema: Arc<Type>, group_size: usize) -> Result<RowWriter<fs::File>> {
         let props = Arc::new(WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
@@ -107,16 +109,62 @@ impl<W: Write> RowWriter::<W> {
     }
 
 
-    pub fn flush(&mut self) -> Result<()> {
-        let mut row_group_writer = self.row_writer.next_row_group().unwrap();
-        let rows_to_write = mem::take(&mut self.buffer);
-        
-        match Self::flush_aux(self.schema.clone(), rows_to_write, row_group_writer) {
-            Ok(duration) => self.duration += duration,
-            Err(err) => return Err(err)
+    fn await_writer_thread(&mut self, state: FlushStatus) -> Result<()> {
+        loop {
+            let mut status = self.flush_status.lock().unwrap();
+            match &*status {
+                FlushStatus::None => {
+                        *status = state;
+                        break
+                    },
+                FlushStatus::Running => {
+                        thread::sleep(time::Duration::from_millis(10));
+                        continue
+                    }
+                // FlushStatus::Ready(result)=> {
+                //         match result {
+                //             // duration handling should be outside of this method, this complicates things
+                //             Ok(duration) => {
+                //                     self.duration += *duration;
+                //                     *status = state;
+                //                     break;
+                //                 },
+                //             Err(err) => return Err(*err)
+                //         }
+                //     }
+            }
         }
         Ok(())
     }
+
+
+    pub fn flush(&mut self) -> Result<()> {
+        let rows_to_write = mem::take(&mut self.buffer);
+
+        if TWO_THREADED {
+            self.await_writer_thread(FlushStatus::Running).unwrap();
+            let mut row_group_writer = self.row_writer.next_row_group().unwrap();
+            let schema = self.schema.clone();
+
+            // This strategy fails as the SerializedRowGroupWriter is not 'sync' and thus can not be passed across threads.
+            // I have to make a split in RowWriter in 'RowWriteBuffer and RowWriter, and move all write logic to a separate thread.
+            // The two threads communicate over a channel that receives filled buffers.
+            // That way all parquet-write code will be in a single thread, and does not need to be send anymore.
+            // let _ = thread::spawn(move || {
+            //     let result = Self::flush_aux(schema, rows_to_write, row_group_writer).unwrap();    
+//            });
+                // handle duration
+            } else {
+            let mut row_group_writer = self.row_writer.next_row_group().unwrap();
+
+            match Self::flush_aux(self.schema.clone(), rows_to_write, row_group_writer) {
+                Ok(duration) => self.duration += duration,
+                Err(err) => return Err(err)
+            }
+        }
+        Ok(())
+    }
+
 
     pub fn append_row(&mut self, row: Row) {
         self.buffer.push(row);
@@ -139,6 +187,11 @@ impl<W: Write> RowWriter::<W> {
                 panic!("auto-Flush on close failed with {err}");
             }
         }
+
+        if TWO_THREADED {
+            self.await_writer_thread(FlushStatus::None).unwrap();
+        }
+
         self.row_writer.close();
     }
 }
