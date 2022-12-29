@@ -1,7 +1,8 @@
 use std::{
     fs,
     path::Path,
-    sync::Arc};
+    sync::Arc,
+    time::{Instant, Duration}};
 use parquet::{
 //        file::{reader::{SerializedFileReader, FileReader}, metadata::ParquetMetaData},
 //        schema::parser::parse_message_type,
@@ -17,6 +18,7 @@ use super::writer::RowWriter;
 pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
 
 //    let mut merged_rows = Vec::new();
+    let timer = Instant::now();
 
     let mut row_iters: Vec<RowIterExt> = paths
     .iter()
@@ -75,7 +77,13 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
     //     .take(last_n)
     //     .rev()
     //     .for_each(|row| println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap()))
+    let write_duration = row_writer.write_duration();
     row_writer.close();
+    let elapsed = timer.elapsed();
+    let write_perc = (100* write_duration.as_millis()) as f64/(elapsed.as_millis() as f64);
+
+    println!("The total time elapsed is {:?} of which {:?} is spend on writing (flushing), which is {:.1}% of the total", elapsed, write_duration, write_perc);
+
 }
 
 

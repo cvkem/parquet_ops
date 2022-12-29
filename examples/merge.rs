@@ -39,7 +39,8 @@ fn main() {
 
     let elapsed = timer.elapsed();
 
-    println!("Action '{}' with duration {:?}", &action, &elapsed);
+
+    println!("Action '{}' with duration {:?}.", &action, &elapsed);
 
 
     // restructure to check output file of merge (not created yet)

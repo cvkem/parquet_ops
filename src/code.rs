@@ -237,7 +237,7 @@ fn write_parquet_row_group(writer: &mut SerializedFileWriter<fs::File>,
 
 pub fn write_parquet(path: &Path, num_recs: Option<u64>, group_size: Option<u64>,
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
-    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else {ttypes::MESSAGE_TYPE};
+    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else {ttypes::LONG_MESSAGE_TYPE};
     let schema = Arc::new(parse_message_type(message_type).unwrap());
     let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)

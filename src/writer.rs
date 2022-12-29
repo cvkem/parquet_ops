@@ -1,10 +1,11 @@
 use std::{
     fs,
     io::Write,
+    mem,
     path::Path,
     slice::Iter,
-    sync::Arc,
-    time::Instant
+    sync::{Arc, Mutex},
+    time::{Instant, Duration}, any::type_name
 };
 use parquet::{
     basic::{Compression, ConvertedType, Type as PhysicalType},
@@ -12,7 +13,7 @@ use parquet::{
     errors::Result,
     file::{
         properties::WriterProperties,
-        writer::{SerializedFileWriter, SerializedColumnWriter}
+        writer::{SerializedFileWriter, SerializedColumnWriter, SerializedRowGroupWriter}
     },
     record::{Row,
         RowAccessor
@@ -22,15 +23,21 @@ use parquet::{
 use super::ttypes;
 
 
-
+enum FlushStatus {
+    None, 
+    Running, 
+    Ready(Result<Duration>)
+}
 
 
 pub struct RowWriter<W: Write>{
     max_row_group: usize,
     row_writer: SerializedFileWriter<W>,
     buffer: Vec<Row>,
-    schema: Arc<Type>
-
+    schema: Arc<Type>,
+    // internal
+    duration: Duration,
+    flush_status: Arc<Mutex<FlushStatus>>
 }
 
 
@@ -46,7 +53,9 @@ impl<W: Write> RowWriter::<W> {
             row_writer: SerializedFileWriter::<_>::new(file, schema, props).unwrap(),
             max_row_group: group_size,
             buffer: Vec::with_capacity(group_size),
-            schema: schema_clone
+            schema: schema_clone,
+            duration: Duration::new(0, 0),
+            flush_status: Arc::new(Mutex::new(FlushStatus::None))
         };
     
         Ok(row_writer)
@@ -57,26 +66,24 @@ impl<W: Write> RowWriter::<W> {
     }
 
 
-    pub fn flush(&mut self) -> Result<()> {
-        let mut row_group_writer = self.row_writer.next_row_group().unwrap();
+    pub fn flush_aux(schema: Arc<Type>, buffer: Vec<Row>, mut row_group_writer: SerializedRowGroupWriter<W>) -> Result<Duration> {
 
         let timer = Instant::now();
 
-        for (idx, field) in self.schema.get_fields().iter().enumerate() {
+        for (idx, field) in schema.get_fields().iter().enumerate() {
 
             if let Some(mut col_writer) = row_group_writer.next_column().unwrap() {
                 match field.get_basic_info().converted_type() {
-                    ConvertedType::INT_64 => write_i64_column(self.buffer.iter(), idx, &mut col_writer)?,
-                    ConvertedType::INT_32 => write_i32_column(self.buffer.iter(), idx, &mut col_writer)?,
-                    ConvertedType::UTF8 => write_utf8_column(self.buffer.iter(), idx, &mut col_writer)?,
-                    ConvertedType::TIMESTAMP_MILLIS => {
-    
-                    },
+                    ConvertedType::INT_64 => write_i64_column(buffer.iter(), idx, &mut col_writer)?,
+                    ConvertedType::UINT_64 => write_u64_column(buffer.iter(), idx, &mut col_writer)?,
+                    ConvertedType::INT_32 => write_i32_column(buffer.iter(), idx, &mut col_writer)?,
+                    ConvertedType::UTF8 => write_utf8_column(buffer.iter(), idx, &mut col_writer)?,
+                    ConvertedType::TIMESTAMP_MILLIS => write_ts_millis_column(buffer.iter(), idx, &mut col_writer)?,  // write the raw type
                     // some more types need to be implemented
                     ConvertedType::NONE => {
                         match field.get_physical_type() {
-                            PhysicalType::INT64 => write_i64_column(self.buffer.iter(), idx, &mut col_writer)?,
-                            PhysicalType::INT32 => write_i32_column(self.buffer.iter(), idx, &mut col_writer)?,
+                            PhysicalType::INT64 => write_i64_column(buffer.iter(), idx, &mut col_writer)?,
+                            PhysicalType::INT32 => write_i32_column(buffer.iter(), idx, &mut col_writer)?,
                             _ => {
                                 panic!("Column {idx}: Unknown Pysical-type {:?}", field.get_physical_type());
                             }
@@ -86,17 +93,30 @@ impl<W: Write> RowWriter::<W> {
                     _ => panic!("Column {idx}: Unknown Converted-type {:?}", field.get_basic_info().converted_type())
                 }
                 // ensure the col_writer is closed, however, end of block possibly does close it automatic.
-                col_writer.close();    
+                col_writer.close(); 
             } else {
                 panic!("Could not find a column-writer for column {idx} containing {:#?}", field)
             }
         }
         row_group_writer.close();
 
-        println!("Flushing the row-group takes {:?}", timer.elapsed());
-        Ok(())
+        let elapsed = timer.elapsed();
+
+        println!("Flushing the row-group takes {:?}", elapsed);
+        Ok(elapsed)
     }
 
+
+    pub fn flush(&mut self) -> Result<()> {
+        let mut row_group_writer = self.row_writer.next_row_group().unwrap();
+        let rows_to_write = mem::take(&mut self.buffer);
+        
+        match Self::flush_aux(self.schema.clone(), rows_to_write, row_group_writer) {
+            Ok(duration) => self.duration += duration,
+            Err(err) => return Err(err)
+        }
+        Ok(())
+    }
 
     pub fn append_row(&mut self, row: Row) {
         self.buffer.push(row);
@@ -107,8 +127,11 @@ impl<W: Write> RowWriter::<W> {
         }
     }
 
+    pub fn write_duration(&self) -> Duration {
+        self.duration.clone()
+    }
 
-    // Close does not consume the writer. 
+    // Close does consume the writer. 
     // Possibly does this work well when combined with a drop trait?
     pub fn close(mut self)  {
         if self.buffer.len() > 0 {
@@ -131,10 +154,15 @@ impl<W: Write> RowWriter::<W> {
 
 // implementations of the columns-writers are implemented as private functions.
 
+// return the type of a ref as a static string
+fn type_of<T>(_: &T) -> &'static str {
+    type_name::<T>()
+}
 
-fn write_i64_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
+fn write_i64_column_aux<R>(rows: Iter<Row>, col_writer: &mut SerializedColumnWriter, row_acccessor: R) -> Result<()> where 
+    R: FnMut(&Row) -> i64 {
     let column: Vec<i64> = rows
-        .map(|row| row.get_long(idx).unwrap() )
+        .map( row_acccessor )
         .collect();
     let the_min = column.iter().min().unwrap();
     let the_max = column.iter().max().unwrap();
@@ -144,6 +172,39 @@ fn write_i64_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedCol
         .write_batch_with_statistics(&column, None, None, Some(&the_min), Some(&the_max), None)?;
     Ok(())
 }
+
+
+fn write_i64_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
+    write_i64_column_aux(rows, col_writer, |row: &Row| row.get_long(idx).unwrap())
+}
+
+fn write_u64_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
+    write_i64_column_aux(rows, col_writer, |row: &Row| (row.get_ulong(idx).unwrap() as i64))
+}
+
+fn write_ts_millis_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
+    write_i64_column_aux(rows, col_writer, |row: &Row| (row.get_timestamp_millis(idx).unwrap() as i64))
+}
+
+
+
+// fn write_i64_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
+//     let first_row = rows.clone().next();
+
+//     println!("column {idx} has values {:?} of type {}", &first_row, type_of(&first_row));
+//     println!(" Full row: {:#?}", first_row);
+
+//     let column: Vec<i64> = rows
+//         .map(|row| row.get_long(idx).unwrap() )
+//         .collect();
+//     let the_min = column.iter().min().unwrap();
+//     let the_max = column.iter().max().unwrap();
+
+//     col_writer
+//         .typed::<Int64Type>()
+//         .write_batch_with_statistics(&column, None, None, Some(&the_min), Some(&the_max), None)?;
+//     Ok(())
+// }
 
 fn write_i32_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
     let column: Vec<i32> = rows
@@ -159,17 +220,38 @@ fn write_i32_column(rows: Iter<Row>,  idx: usize, col_writer: &mut SerializedCol
 }
 
 
+use std::cmp::Ordering;
 
 fn write_utf8_column(rows: Iter<Row>, idx: usize, col_writer: &mut SerializedColumnWriter) -> Result<()> {
     let column: Vec<ByteArray> = rows
         .map(|row| row.get_string(idx).unwrap().as_str().into())
         .collect();
-//        let the_min = column.iter().min().unwrap();
-//        let the_max = column.iter().max().unwrap();
+// //        let the_min = column.iter().min().unwrap();
+// //        let the_max = column.iter().max().unwrap();
+
+//     col_writer
+//         .typed::<ByteArrayType>()
+//         .write_batch_with_statistics(&column, None, None, Some(&(column[0])), column.last(), None)?;
+    let the_min = column.iter().reduce(|a, b| {
+            match a.partial_cmp(b) {
+                    Some(Ordering::Equal) => a,
+                    Some(Ordering::Greater) => b,
+                    Some(Ordering::Less) => a,
+                    None => a
+                }
+        }).unwrap();
+        let the_max = column.iter().reduce(|a, b| {
+            match a.partial_cmp(b) {
+                    Some(Ordering::Equal) => a,
+                    Some(Ordering::Greater) => a,
+                    Some(Ordering::Less) => b,
+                    None => a
+                }
+        }).unwrap();
 
     col_writer
         .typed::<ByteArrayType>()
-        .write_batch_with_statistics(&column, None, None, Some(&(column[0])), column.last(), None)?;
+        .write_batch_with_statistics(&column, None, None, Some(the_min), Some(the_max), None)?;
     Ok(())
 }
 
