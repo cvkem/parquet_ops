@@ -4,11 +4,12 @@ pub use self::{
     merge::merge_parquet,
     code::{write_parquet, read_parquet_metadata},
     ttypes::MESSAGE_TYPE,
-    writer::RowWriter
+    rowwritebuffer::RowWriteBuffer
 };
 
 mod rowiterext;
-mod writer;
+mod rowwritebuffer;
+mod rowwriter;
 mod merge;
 mod code;
 mod ttypes;

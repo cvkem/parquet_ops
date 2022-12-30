@@ -12,7 +12,7 @@ use parquet::{
 };
 
 use super::rowiterext::RowIterExt;
-use super::writer::RowWriter;
+use super::rowwritebuffer::RowWriteBuffer;
 
 
 pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
@@ -30,7 +30,7 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
         panic!("Nothing to merge");
     }
     let schema = Arc::new(row_iters[0].metadata().file_metadata().schema().clone());
-    let mut row_writer = RowWriter::<fs::File>::new(Path::new("merged.parquet"), schema, 10000).unwrap();
+    let mut row_writer = RowWriteBuffer::new(Path::new("merged.parquet"), schema, 10000).unwrap();
 
     let mut row_processor = |row: Row| {
         if row.get_long(0).unwrap() % 10000 == 0 {
@@ -77,12 +77,13 @@ pub fn merge_parquet(paths: Vec<&Path>, smaller: fn(&Row, &Row) -> bool) {
     //     .take(last_n)
     //     .rev()
     //     .for_each(|row| println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap()))
-    let write_duration = row_writer.write_duration();
+//    let write_duration = row_writer.write_duration();
+    println!("Closing the RowWriteBuffer");
     row_writer.close();
-    let elapsed = timer.elapsed();
-    let write_perc = (100* write_duration.as_millis()) as f64/(elapsed.as_millis() as f64);
+//    let elapsed = timer.elapsed();
+//    let write_perc = (100* write_duration.as_millis()) as f64/(elapsed.as_millis() as f64);
 
-    println!("The total time elapsed is {:?} of which {:?} is spend on writing (flushing), which is {:.1}% of the total", elapsed, write_duration, write_perc);
+//    println!("The total time elapsed is {:?} of which {:?} is spend on writing (flushing), which is {:.1}% of the total", elapsed, write_duration, write_perc);
 
 }
 
