@@ -1,8 +1,10 @@
 use std::{
     env,
-    fs, 
-    path::Path, 
-    io::Read};
+    fs,  
+    io::Read,
+    path::Path,
+    thread
+};
 use std::time::Instant;
 use std::any::type_name;
 use parquet_exp;
@@ -38,13 +40,20 @@ fn main() {
     let num_recs = if args.len() > 1 { get_u64_from_string(&args[1], "first argument should be 'num_recs' (a positive integer).") } else { None };
     let group_size = if args.len() > 2 { get_u64_from_string(&args[2], "second argument should be 'group_size' (a positive integer).") } else { None };
 
-    println!("Creating file with even-rows in {:?}", &path_1);     
-    parquet_exp::write_parquet(&path_1, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap();        
-    println!("Creating file with odd-rows in {:?}", &path_2);        
-    parquet_exp::write_parquet(&path_2, num_recs, group_size, Some(|i| i % 2 != 0)).unwrap();        
+    let num_recs_cpy = num_recs.clone();
+    let group_size_cpy = group_size.clone();
 
+    println!("Creating file with even-rows in {:?}", &path_1);
+    let even_handle = thread::spawn(move || parquet_exp::write_parquet(&path_1, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap());
+ 
+    println!("Creating file with odd-rows in {:?}", &path_2);        
+    let odd_handle = thread::spawn(move || parquet_exp::write_parquet(&path_2, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
+
+    even_handle.join();
+    odd_handle.join();
 
     let elapsed = timer.elapsed();
+
 
     println!("Action '{}' with duration {:?}", &action, &elapsed);
 
