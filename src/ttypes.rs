@@ -16,6 +16,34 @@ message schema {
 // }
 // ";
 
+
+macro_rules! MESSAGE_FORMAT {() => ("message schema {{
+  REQUIRED INT64 id;
+  REQUIRED BINARY account (UTF8);
+  REQUIRED INT32 amount;
+  REQUIRED INT64 datetime (TIMESTAMP(MILLIS,true));
+  {}
+}} 
+")}
+
+// const NESTED_MESSAGE_TYPE: &str = "
+// message schema {
+//   REQUIRED BINARY account (UTF8);
+//   REPEATED INT32 amount;
+// }
+// ";
+
+pub fn get_schema_str(num_extra_columns: usize) -> String {
+let columns = (0..num_extra_columns)
+//    .iter()
+  .map(|idx| format!("REQUIRED BINARY extra_{:02?} (UTF8);", idx))
+  .collect::<Vec<String>>()
+  .join("\n    ");
+
+  format!(MESSAGE_FORMAT!(), columns)
+}
+
+
 pub const LONG_MESSAGE_TYPE: &str = "
 message schema {
   REQUIRED INT64 id;

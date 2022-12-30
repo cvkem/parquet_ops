@@ -4,8 +4,8 @@ use std::{
     fs,
     io,
     path::Path, 
-    sync::Arc};
-use std::time::Instant;
+    sync::Arc,
+    time::Instant};
 use parquet::{
     basic::Compression,
     data_type::{Int32Type, Int64Type, ByteArrayType, ByteArray},
@@ -48,6 +48,8 @@ fn type_of<T>(_: &T) -> &'static str {
 }
 
 const NESTED: bool = false;
+
+use crate::ttypes::get_schema_str;
 
 use super::ttypes;
 
@@ -235,9 +237,10 @@ fn write_parquet_row_group(writer: &mut SerializedFileWriter<fs::File>,
 
 
 
-pub fn write_parquet(path: &Path, num_recs: Option<u64>, group_size: Option<u64>,
+pub fn write_parquet(path: &Path, extra_columns: usize, num_recs: Option<u64>, group_size: Option<u64>,
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
-    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else {ttypes::LONG_MESSAGE_TYPE};
+    let long_schema =  ttypes::get_schema_str(extra_columns);
+    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else { &long_schema };
     let schema = Arc::new(parse_message_type(message_type).unwrap());
     let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
