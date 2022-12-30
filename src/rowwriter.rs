@@ -24,6 +24,15 @@ use parquet::{
     schema::types::Type
 };
 
+// use memory_stats::memory_stats;
+
+// fn show_memory_usage(prefix: &str) {
+//     if let Some(usage) = memory_stats() {
+//         println!("{prefix}: Current physical memory usage: {:.1}Mb and virtual usage {:.1}", usage.physical_mem as f64 / 1_000_000 as f64, usage.virtual_mem as f64 /1_000_000 as f64);
+//     } else {
+//         println!("{prefix}: Couldn't get the current memory usage");
+//     }
+// }
 
 
 pub struct RowWriter {
@@ -42,7 +51,9 @@ impl RowWriter {
 
         let mut idx = 0;
         for rows in to_write {
+//            show_memory_usage("before");
             let duration = row_writer.write_row_group(rows)?;
+//            show_memory_usage("after");
             total_duration += duration;
             idx += 1;
             println!("rowgroup {idx}: Total-write-duration={total_duration:?}");

@@ -3,7 +3,7 @@ use std::{
     io::Write,
     mem,
     path::Path,
-    sync::{Arc, mpsc::{self, Sender}},
+    sync::{Arc, mpsc::{self, SyncSender}},
     thread,
 };
 use parquet::{
@@ -17,7 +17,7 @@ pub struct RowWriteBuffer {
     max_row_group: usize,
     buffer: Vec<Row>,
     schema: Arc<Type>,
-    write_sink: Sender<Vec<Row>>,
+    write_sink: SyncSender<Vec<Row>>,
     writer_handle: thread::JoinHandle<()>
 }
 
@@ -25,7 +25,7 @@ pub struct RowWriteBuffer {
 impl RowWriteBuffer {
     
     pub fn new(path: &Path, schema: Arc<Type>, group_size: usize) -> Result<RowWriteBuffer> {
-        let (write_sink, rec_buffer) = mpsc::channel();
+        let (write_sink, rec_buffer) = mpsc::sync_channel(2);
 
         let schema_clone = schema.clone();
         let path_clone = path.to_owned();
