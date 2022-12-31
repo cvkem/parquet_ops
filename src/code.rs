@@ -49,7 +49,6 @@ fn type_of<T>(_: &T) -> &'static str {
 
 const NESTED: bool = false;
 
-use crate::ttypes::get_schema_str;
 
 use super::ttypes;
 
@@ -280,9 +279,9 @@ fn print_schema(schema: &Type) {
     for (idx, fld) in schema.get_fields().iter().enumerate() {
         println!("idx={}   {:?}", &idx, &fld);
         let nme = fld.get_basic_info().name();
-        let convType = fld.get_basic_info().converted_type();
-        let physType = fld.get_physical_type();
-        println!("idx={}   name={}, convType={} and physicalType={}", &idx, &nme, &convType, &physType);
+        let conv_type = fld.get_basic_info().converted_type();
+        let phys_type = fld.get_physical_type();
+        println!("idx={}   name={}, conv_type={} and physicalType={}", &idx, &nme, &conv_type, &phys_type);
     }
 }
 

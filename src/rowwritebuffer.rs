@@ -1,8 +1,6 @@
 use std::{
-    fs,
-    io::Write,
+//    io::Write,
     mem,
-    path::Path,
     sync::{Arc, mpsc::{self, SyncSender}},
     thread,
 };
@@ -16,7 +14,6 @@ use crate::rowwriter;
 pub struct RowWriteBuffer {
     max_row_group: usize,
     buffer: Vec<Row>,
-    schema: Arc<Type>,
     write_sink: SyncSender<Vec<Row>>,
     writer_handle: thread::JoinHandle<()>
 }
@@ -24,7 +21,7 @@ pub struct RowWriteBuffer {
 
 impl RowWriteBuffer {
     
-    pub fn new(path: &Path, schema: Arc<Type>, group_size: usize) -> Result<RowWriteBuffer> {
+    pub fn new(path: &str, schema: Arc<Type>, group_size: usize) -> Result<RowWriteBuffer> {
         let (write_sink, rec_buffer) = mpsc::sync_channel(2);
 
         let schema_clone = schema.clone();
@@ -40,7 +37,6 @@ impl RowWriteBuffer {
         let row_writer = RowWriteBuffer {
             max_row_group: group_size,
             buffer: Vec::with_capacity(group_size),
-            schema: schema.clone(),
             write_sink,
             writer_handle
         };
@@ -88,7 +84,7 @@ impl RowWriteBuffer {
         drop(self.write_sink);
 
         // wait for writer to be ready
-        self.writer_handle.join();
+        self.writer_handle.join().unwrap();
 
     }
 }

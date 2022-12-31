@@ -43,7 +43,7 @@ let columns = (0..num_extra_columns)
   format!(MESSAGE_FORMAT!(), columns)
 }
 
-
+#[allow(dead_code)]
 pub const LONG_MESSAGE_TYPE: &str = "
 message schema {
   REQUIRED INT64 id;

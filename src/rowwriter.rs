@@ -2,13 +2,10 @@
 use std::{
     cmp::Ordering,
     fs,
-    io::Write,
-    mem,
     path::Path,
     slice::Iter,
-    sync::{Arc, Mutex, mpsc::Receiver},
-    thread,
-    time::{self, Instant, Duration}, any::type_name
+    sync::{Arc, mpsc::Receiver},
+    time::{Instant, Duration}
 };
 use parquet::{
     basic::{Compression, ConvertedType, Type as PhysicalType},
@@ -16,7 +13,7 @@ use parquet::{
     errors::Result,
     file::{
         properties::WriterProperties,
-        writer::{SerializedFileWriter, SerializedColumnWriter, SerializedRowGroupWriter}
+        writer::{SerializedFileWriter, SerializedColumnWriter}
     },
     record::{Row,
         RowAccessor
@@ -43,7 +40,7 @@ pub struct RowWriter {
 
 impl RowWriter {
 
-    pub fn channel_writer(to_write: Receiver<Vec<Row>>, path: &Path, schema: Arc<Type>) -> Result<()> {
+    pub fn channel_writer(to_write: Receiver<Vec<Row>>, path: &str, schema: Arc<Type>) -> Result<()> {
 
         let mut row_writer = Self::create_writer(path, schema)?;
 
@@ -67,16 +64,17 @@ impl RowWriter {
     }
 
 
-    fn create_writer(path: &Path, schema: Arc<Type>) ->  Result<RowWriter> {
+    fn create_writer(path: &str, schema: Arc<Type>) ->  Result<RowWriter> {
+        
         let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
         .build());
-        let file = fs::File::create(&path).unwrap();
+        let file = fs::File::create(Path::new(path)).unwrap();
         let schema_clone = schema.clone();
         
         let row_writer = RowWriter {
             row_writer: SerializedFileWriter::<_>::new(file, schema_clone, props).unwrap(),
-            schema: schema
+            schema
         };
         Ok(row_writer)
     }
@@ -117,12 +115,12 @@ impl RowWriter {
                     _ => panic!("Column {idx}: Unknown Converted-type {:?}", field.get_basic_info().converted_type())
                 }
                 // ensure the col_writer is closed, however, end of block possibly does close it automatic.
-                col_writer.close(); 
+                col_writer.close()?; 
             } else {
                 panic!("Could not find a column-writer for column {idx} containing {:#?}", field)
             }
         }
-        row_group_writer.close();
+        row_group_writer.close()?;
 
         let elapsed = timer.elapsed();
 
@@ -133,10 +131,6 @@ impl RowWriter {
 }
 
 
-// return the type of a ref as a static string
-fn type_of<T>(_: &T) -> &'static str {
-    type_name::<T>()
-}
 
 
 // implementations of the columns-writers are implemented as private functions.

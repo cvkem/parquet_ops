@@ -9,6 +9,7 @@ use parquet::record::{Row,
     RowAccessor};
 use parquet_exp;
 
+#[allow(dead_code)]
 // return the type of a ref as a static string
 fn type_of<T>(_: &T) -> &'static str {
     type_name::<T>()
@@ -30,12 +31,12 @@ fn smaller_test(row_1: &Row, row_2: &Row) -> bool {
 fn main() {
     let action = env::args().next().unwrap_or("UNKNOWN".to_owned());
 
-    let path_1 = Path::new(paths::PATH_1);
-    let path_2 = Path::new(paths::PATH_2);
+    let path_1 = paths::PATH_1;
+    let path_2 = paths::PATH_2;
 
     let timer = Instant::now();
 
-    parquet_exp::merge_parquet(vec![path_1, path_2], smaller_test);
+    parquet_exp::merge_parquet(vec![path_1, path_2], "merged.parquet", smaller_test);
 
     let elapsed = timer.elapsed();
 
