@@ -11,29 +11,6 @@ use parquet::{
 };
 
 
-fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, ParquetMetaData)> {
-//    let proj = parse_message_type(message_type).ok();
-    let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
-    println!(" The type = {:?}", proj);
-    let reader = SerializedFileReader::try_from(path.to_owned()).unwrap();
-    let parquet_metadata = reader.metadata();
-    // clone needed to get a copy, as we currently only have a reference to an Arc<ParquetMetaData>
-    let parquet_metadata  = parquet_metadata.clone();
-
-    println!("Opened file with metadata {:?}", reader.metadata());
-    let res = RowIter::from_file_into(Box::new(reader))
-            .project(proj);
-    if res.is_err() {
-        println!(" failed with error: {:?}", res.err());
-        return None;
-    } 
-
-    let row_iter = res.unwrap();
-
-    Some((row_iter, parquet_metadata.clone()))
-}
-
-
 
 pub struct RowIterExt<'a> {
     row_iter: RowIter<'a>,
@@ -88,6 +65,62 @@ impl<'a> RowIterExt<'a> {
 }
 
 
+fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, ParquetMetaData)> {
+    //    let proj = parse_message_type(message_type).ok();
+        let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
+        println!(" The type = {:?}", proj);
+
+        // we differentiate at this level for the different types of inputs as lower levels can not handle this more generic
+        // as the Associated types are in the way on ChunkReader, and also on SerializedFileReader as it wants to see the generic.
+        // handling it at this level introduces some source-code-duplication, but that is manageable.
+        let (ri_res, parquet_metadata) = match path.split(':').next().unwrap() {
+            prefix if path.len() == prefix.len() => {
+                    let reader = SerializedFileReader::try_from(path.to_owned()).unwrap();
+                    let parquet_metadata = reader.metadata().clone();
+                    let ri_res = RowIter::from_file_into(Box::new(reader))
+                        .project(proj);
+                    (ri_res, parquet_metadata)        
+                }
+            "mem" =>panic!("prefix 'mem:'can best be handled via temp-files, or all data should be incoded in the path-string"),
+            "s3" => panic!("{path}: S3 still has to be implemented."),
+            prefix => panic!("get_parquet_iter not implemented for prefix {prefix} of path {path}")
+            };
+
+        if ri_res.is_err() {
+            println!("Opening {path} failed with error: {:?}", ri_res.err());
+            return None;
+        } 
+    
+        let row_iter = ri_res.unwrap();
+    
+        Some((row_iter, parquet_metadata))
+    }
+    
+
+// failed experiment: Associated Type is manditory, so I can not generalize
+//
+// use parquet::file::reader::ChunkReader;
+// use bytes::Bytes;
+// use std::io::BufReader;
+// use std::fs;
+
+// fn create_SerializedFileReader(path: &str) -> Box<SerializedFileReader> {
+//      match path.split(':').next().unwrap() {
+//         path => {
+//                 let file = fs::OpenOptions::new()
+//                     .read(true)
+//                     .open(path)
+//                     .unwrap();
+//                 let chunk_reader = ChunkReader::new(file);
+//                 let SF_reader = SerializedFileReader::new(chunk_reader);
+//                 Box::new(SF_reader)
+//             },
+// //        "mem" => Box::new(Bytes::new()), // how to get this filled up?
+// //        "s3" => println!("{s}: S3"),
+//         prefix => panic!("Unknown prefix '{prefix}' on file {path}")
+//     }
+// }
+    
 
 
 pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &str) {

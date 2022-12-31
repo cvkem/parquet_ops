@@ -1,8 +1,7 @@
 
 use std::{
     cmp::Ordering,
-    fs,
-    path::Path,
+    io::Write,
     slice::Iter,
     sync::{Arc, mpsc::Receiver},
     time::{Instant, Duration}
@@ -32,17 +31,17 @@ use parquet::{
 // }
 
 
-pub struct RowWriter {
+pub struct RowWriter<W: Write> {
     schema: Arc<Type>,
-    row_writer: SerializedFileWriter::<fs::File>
+    row_writer: SerializedFileWriter::<W>
 }
 
 
-impl RowWriter {
+impl<W: Write> RowWriter<W> {
 
-    pub fn channel_writer(to_write: Receiver<Vec<Row>>, path: &str, schema: Arc<Type>) -> Result<()> {
+    pub fn channel_writer(to_write: Receiver<Vec<Row>>, writer: W, schema: Arc<Type>) -> Result<()> {
 
-        let mut row_writer = Self::create_writer(path, schema)?;
+        let mut row_writer = Self::create_writer(writer, schema)?;
 
         let mut total_duration = Duration::new(0, 0);
 
@@ -64,16 +63,16 @@ impl RowWriter {
     }
 
 
-    fn create_writer(path: &str, schema: Arc<Type>) ->  Result<RowWriter> {
+    fn create_writer(writer: W, schema: Arc<Type>) ->  Result<RowWriter<W>> {
         
         let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
         .build());
-        let file = fs::File::create(Path::new(path)).unwrap();
+
         let schema_clone = schema.clone();
         
         let row_writer = RowWriter {
-            row_writer: SerializedFileWriter::<_>::new(file, schema_clone, props).unwrap(),
+            row_writer: SerializedFileWriter::<_>::new(writer, schema_clone, props).unwrap(),
             schema
         };
         Ok(row_writer)

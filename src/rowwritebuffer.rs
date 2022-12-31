@@ -1,5 +1,6 @@
 use std::{
-//    io::Write,
+    fs,
+    io::{Write, BufWriter},
     mem,
     sync::{Arc, mpsc::{self, SyncSender}},
     thread,
@@ -28,7 +29,8 @@ impl RowWriteBuffer {
         let path_clone = path.to_owned();
 
         let writer_handle = thread::spawn(move || {
-            match rowwriter::RowWriter::channel_writer(rec_buffer, &path_clone, schema_clone) {
+            let writer = create_writer(&path_clone);
+            match rowwriter::RowWriter::channel_writer(rec_buffer, writer, schema_clone) {
                 Ok(()) => println!("File {path_clone:?} written"),
                 Err(err) => println!("Writing file failed with errors {:?}", err)
             }
@@ -98,6 +100,25 @@ impl RowWriteBuffer {
 //     }
 // }
 
+
+
+fn create_writer(path: &str) -> Box<dyn Write> {
+    let writer: Box<dyn Write> = match path.split(':').next().unwrap() {
+        prefix if prefix.len() == path.len() => {
+                let file = fs::OpenOptions::new()
+//                    .read(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(path)
+                    .unwrap();
+                Box::new(BufWriter::new(file))
+            },
+        "mem" => Box::new(Vec::new()),
+//        "s3" => println!("{s}: S3"),
+        prefix => panic!("Unknown prefix '{prefix}' on file {path}")
+    };
+    writer
+}
 
 
 
