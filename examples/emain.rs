@@ -47,8 +47,8 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    let path_1 = Path::new(paths::PATH_1);
-    let path_2 = Path::new(paths::PATH_2);
+    let path_1 = paths::PATH_1;
+    let path_2 = paths::PATH_2;
 
     let action = if args.len() > 1 { args[1].to_owned() } else { "write".to_owned() };
 
@@ -60,13 +60,13 @@ fn main() {
             let group_size = if args.len() > 3 { get_u64_from_string(&args[3], "second argument should be 'group_size' (a positive integer).") } else { None };
         
             println!("Creating file in {:?}", &path_1);     
-            write_parquet(&path_1, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap();        
+            write_parquet(&Path::new(path_1), 1, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap();        
             // write_parquet(&path_1, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap();        
             // println!("Creating file in {:?}", &path_2);        
             // write_parquet(&path_2, num_recs, group_size, Some(|i| i % 2 != 0)).unwrap();        
         },
-        "meta" => read_parquet_metadata(&path_1),
-        "merge" => merge_parquet(vec![path_1, path_2], smaller_test),
+        "meta" => read_parquet_metadata(&Path::new(path_1)),
+        "merge" => merge_parquet(vec![path_1, path_2], "merged.parquet", smaller_test),
         "read" => {
 //            let acc_name = Some(if args.len() > 2 { args[2].to_owned() } else { "aafqlr".to_owned() }); // exists at end of file with 1_000_000 records.
 //            block_on(read_parquet(&path, acc_name));
