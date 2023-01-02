@@ -7,7 +7,7 @@ use std::{
 };
 use parquet::{
     errors::Result,
-    record::Row,
+    record::{Field, Row},
     schema::types::Type
 };
 use crate::rowwriter;
@@ -101,13 +101,15 @@ impl RowWriteBuffer {
 // }
 
 
-
+/// Create a writer based on a string that implements the std::io::Write interface.
+/// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system. 
 fn create_writer(path: &str) -> Box<dyn Write> {
     let writer: Box<dyn Write> = match path.split(':').next().unwrap() {
         prefix if prefix.len() == path.len() => {
                 let file = fs::OpenOptions::new()
 //                    .read(true)
                     .write(true)
+                    .create(true)
                     .truncate(true)
                     .open(path)
                     .unwrap();
@@ -121,6 +123,17 @@ fn create_writer(path: &str) -> Box<dyn Write> {
 }
 
 
+/// Creates a frow from a series of tuples. This function is based on parquet::record::api::make_row, which is a private function.
+/// A transmute is used to be able to create the rows here. This is a safe step as both parquet::record::Row and RowImitation have the same 
+/// definition, both are compiled with the same compiler, and a struct with only 1 field allows for only a single logical layout.
+pub fn create_row(fields: Vec<(String, Field)>) -> Row {
+    
+    pub struct RowImitation {
+        fields: Vec<(String, Field)>,
+    }
+    let row_contents = RowImitation { fields };
+    unsafe {mem::transmute(row_contents)}
+}
 
 #[cfg(test)]
 pub mod tests {
@@ -141,21 +154,12 @@ pub mod tests {
                 SerializedFileReader,
                 FileReader}
         },
-        record::{Row, Field},
-//            api::{Field, make_row}},
+        record::{Row, RowAccessor, Field},
         schema::{parser::parse_message_type,
             types::Type}
     };
-    use parquet_derive::ParquetRecordWriter;
-    use crate::RowWriteBuffer;
-
-    //#[derive(Debug)]
-    // I expect some kind of feature of arrow-parquet is needed to make this work.
-    #[derive(ParquetRecordWriter)]
-    struct TestAccount<'a> {
-        pub id: i64,
-        pub account: &'a str
-    }
+    use crate::rowwritebuffer;
+    use crate::rowiterext;
 
 
     // this is not the right test as I switch to example code
@@ -166,46 +170,38 @@ pub mod tests {
             REQUIRED INT64 id;
             REQUIRED BINARY account (UTF8);
         ";
-        // let input_tuples = vec![(1_i64, "Hello"), (2_i64, "World")];
+        let input_tuples = vec![(1_i64, "Hello".to_owned()), (2_i64, "World".to_owned()), (3_i64, "This is a test!".to_owned())];
 
-        // let tuple_to_row = |(id, account)|  vec![("id", Field.Long(id)), ("account", Field.Str(account))]; 
-        // let input_rows = make_row(input_tuples.into_iter().map(tuple_to_row).collect()); 
-        let test_account_data = vec![
-            TestAccount {
-                id: 1,
-                account: "Hello"
-            },
-            TestAccount {
-                id: 2,
-                account: "World"
-            }
-        ];
-        println!("Original data: {:#?}", test_account_data);
+        let tuple_to_row = |(id, account)|  rowwritebuffer::create_row(vec![("id".to_owned(), Field::Long(id)), ("account".to_owned(), Field::Str(account))]); 
+        let input_rows: Vec<Row> = input_tuples
+            .clone()
+            .into_iter()
+            .map(tuple_to_row)
+            .collect(); 
 
-        let path = Path::new("/tmp/test_write_parquet.parquet");
+        let path = "/tmp/test_write_parquet.parquet";
+//        let path = "test_write_parquet.parquet";
         let schema = Arc::new(parse_message_type(MESSAGE_TYPE).unwrap());
-        let generated_schema = test_account_data.as_slice().schema().unwrap();
-
-        let props = Arc::new(WriterProperties::builder()
-            .set_compression(Compression::SNAPPY)
-            .build());
-//        let row_writer = RowWriter::new(path, schema, 10).unwrap();
-        let file = fs::File::create(&path).unwrap();
-        let mut writer =
-            SerializedFileWriter::new(file, generated_schema, props).unwrap();
 
 
-        println!(" row_data= {:#?}", generated_schema);
+        let mut row_writer = rowwritebuffer::RowWriteBuffer::new(path, schema, 10_000).unwrap();
 
-        // for row in row_data {
-        //     row_writer.append_row(row);
-        // }
-        let mut row_group = row_writer.next_row_group().unwrap();
-        test_account_data.as_slice().write_to_row_group(&mut row_group).unwrap();
-        row_group.close().unwrap();
+        for row in input_rows.into_iter() {
+            row_writer.append_row(row);
+        }
 
 
-        row_writer.close().unwrap();
+        row_writer.close();
+
+        println!("Now open the file {path} and read it again");
+        let result = rowiterext::read_parquet_rowiter(path, Some(10), MESSAGE_TYPE);
+
+        println!("Result of read: {}", result[0]);
+        let output_tuples: Vec<(i64, String)> = result
+            .iter()
+            .map(|row| (row.get_long(0).unwrap(), row.get_string(1).unwrap().to_owned()))
+            .collect();
+        assert_eq!(input_tuples, output_tuples)
 
     }
 

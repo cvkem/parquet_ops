@@ -65,6 +65,9 @@ impl<'a> RowIterExt<'a> {
 }
 
 
+
+/// create an iterator over the data of a Parquet-file.
+/// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system. 
 fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, ParquetMetaData)> {
     //    let proj = parse_message_type(message_type).ok();
         let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
@@ -123,25 +126,30 @@ fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<
     
 
 
-pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &str) {
+pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec<Row>{
     let max_rows = max_rows.or(Some(1000000000)).unwrap();
 
     let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
 
-    let mut sum = 0;
-    let mut last_idx = 0;
+    let mut data = Vec::new();
+
+//    let mut sum = 0;
+//    let mut last_idx = 0;
     for (i, row) in res.enumerate() {
-//        println!("result {i}:  {row:?}");
-        if let Ok(amount) = row.get_int(1) {
-            println!("{i} has amount={amount}");
-            sum += amount;
-        }
+        // println!("result {i}:  {row:?}");
+        // if let Ok(amount) = row.get_int(1) {
+        //     println!("{i} has amount={amount}");
+        //     sum += amount;
+        // }
+        data.push(row);
 
         if i > max_rows { break; }
-        last_idx = i;
+//        last_idx = i;
     }
 
-    println!("iterated over {last_idx}  fields with total amount = {sum}");
+//    println!("iterated over {last_idx}  fields with total amount = {sum}");
+
+    data
 }
 
 
