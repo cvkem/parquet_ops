@@ -139,24 +139,24 @@ pub fn create_row(fields: Vec<(String, Field)>) -> Row {
 pub mod tests {
 
     use std::{
-        fs::File,
-        path::Path,
+        // fs::File,
+        // path::Path,
         sync::Arc};
     use parquet::{
-        basic::Compression,
-        data_type::{Int32Type, Int64Type, ByteArrayType, ByteArray},
-        file::{
-            properties::WriterProperties,
-            writer::{
-                SerializedFileWriter,
-                SerializedRowGroupWriter},
-            reader::{
-                SerializedFileReader,
-                FileReader}
-        },
+        // basic::Compression,
+        // data_type::{Int32Type, Int64Type, ByteArrayType, ByteArray},
+        // file::{
+        //    properties::WriterProperties,
+        //     writer::{
+        //         SerializedFileWriter,
+        //         SerializedRowGroupWriter},
+        //     reader::{
+        //         SerializedFileReader,
+        //         FileReader}
+        // },
         record::{Row, RowAccessor, Field},
-        schema::{parser::parse_message_type,
-            types::Type}
+        schema::parser::parse_message_type,
+        //    types::Type}
     };
     use crate::rowwritebuffer;
     use crate::rowiterext;

@@ -1,3 +1,7 @@
+/// Collection of different pieces of code. 
+/// We need to split out the test-generation code and then throw out the remainder of this file as it is old code.
+/// Generation of Parquet test-files whould be based on the rowwritebuffer, which is more generic.
+/// 
 use std::{ 
     any::type_name,
     cmp,
@@ -18,27 +22,6 @@ use parquet::{
     schema::{parser::parse_message_type,
         types::Type}
 };
-// for reader
-// use parquet::{
-//     arrow::{
-//         ProjectionMask,
-//         arrow_reader::{ParquetRecordBatchReaderBuilder, 
-//             RowFilter,
-//             ArrowPredicateFn,
-//             ArrowPredicate},
-//         async_reader::{ParquetRecordBatchStreamBuilder,
-//             AsyncReader}
-//     },
-//     file::footer::parse_metadata,
-//     schema::types::SchemaDescriptor
-// };
-
-//use rand::prelude::*;
-
-//use arrow::compute::kernels::comparison::eq_dyn_utf8_scalar;
-// use arrow;
-// use futures::executor::block_on;
-// use parquet::arrow::arrow_reader::ArrowReaderOptions;
 
 
 
