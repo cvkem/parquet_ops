@@ -7,11 +7,11 @@ use std::{
 };
 use std::time::Instant;
 use std::any::type_name;
-use parquet_exp;
+use parquet_ops;
 
 
 // only needed for Rust 2015
-//extern crate parquet_exp;
+//extern crate parquet_ops;
 
 mod paths;
 
@@ -45,10 +45,10 @@ fn main() {
     let group_size_cpy = group_size.clone();
 
     println!("Creating file with even-rows in {:?}", &path_1);
-    let even_handle = thread::spawn(move || parquet_exp::write_parquet(&path_1, num_extra_columns, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap());
+    let even_handle = thread::spawn(move || parquet_ops::write_parquet(&path_1, num_extra_columns, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap());
  
     println!("Creating file with odd-rows in {:?}", &path_2);        
-    let odd_handle = thread::spawn(move || parquet_exp::write_parquet(&path_2, num_extra_columns, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
+    let odd_handle = thread::spawn(move || parquet_ops::write_parquet(&path_2, num_extra_columns, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
 
     even_handle.join();
     odd_handle.join();

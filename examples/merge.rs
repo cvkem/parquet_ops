@@ -7,7 +7,7 @@ use std::{
 use std::any::type_name;
 use parquet::record::{Row,
     RowAccessor};
-use parquet_exp;
+use parquet_ops;
 
 #[allow(dead_code)]
 // return the type of a ref as a static string
@@ -16,7 +16,7 @@ fn type_of<T>(_: &T) -> &'static str {
 }
 
 // only needed for Rust 2015
-//extern crate parquet_exp;
+//extern crate parquet_ops;
 
 mod paths;
 
@@ -36,7 +36,7 @@ fn main() {
 
     let timer = Instant::now();
 
-    parquet_exp::merge_parquet(vec![path_1, path_2], "merged.parquet", smaller_test);
+    parquet_ops::merge_parquet(vec![path_1, path_2], "merged.parquet", smaller_test);
 
     let elapsed = timer.elapsed();
 
