@@ -2,7 +2,12 @@ use std::{
     mem
 };
 use parquet::{
-        file::{reader::{SerializedFileReader, FileReader}, metadata::ParquetMetaData},
+        file::{
+            reader::{
+                SerializedFileReader,
+                FileReader,
+                ChunkReader}, 
+            metadata::ParquetMetaData},
         schema::parser::parse_message_type,
         record::{Row,
             RowAccessor,
@@ -32,6 +37,22 @@ impl<'a> RowIterExt<'a> {
             panic!("Failed to create iterator for {}", path);
         }
     }
+
+
+    // pub fn from_chunkreader<CR>(chunk_reader: Box<dyn ChunkReader<T = CR>>) -> Self {
+    //     if let Some((mut row_iter, metadata)) = get_parquet_iter_from_chunkreader(chunk_reader, None) {
+
+    //         let head = row_iter.next();
+    //         RowIterExt {
+    //             row_iter,
+    //             metadata,
+    //             head
+    //         }
+    //     } else {
+    //         panic!("Failed to create iterator for chunkReader");
+    //     }
+    // }
+   
 
     // pub fn next(&mut self) -> Option<Row> {
     //     self.row_iter.next()
@@ -64,41 +85,72 @@ impl<'a> RowIterExt<'a> {
     }
 }
 
+use s3_file::{S3Reader};
 
 
 /// create an iterator over the data of a Parquet-file.
 /// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system. 
 fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, ParquetMetaData)> {
     //    let proj = parse_message_type(message_type).ok();
-        let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
-        println!(" The type = {:?}", proj);
+    let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
+    println!(" The type = {:?}", proj);
 
-        // we differentiate at this level for the different types of inputs as lower levels can not handle this more generic
-        // as the Associated types are in the way on ChunkReader, and also on SerializedFileReader as it wants to see the generic.
-        // handling it at this level introduces some source-code-duplication, but that is manageable.
-        let (ri_res, parquet_metadata) = match path.split(':').next().unwrap() {
-            prefix if path.len() == prefix.len() => {
-                    let reader = SerializedFileReader::try_from(path.to_owned()).unwrap();
-                    let parquet_metadata = reader.metadata().clone();
-                    let ri_res = RowIter::from_file_into(Box::new(reader))
-                        .project(proj);
-                    (ri_res, parquet_metadata)        
-                }
-            "mem" =>panic!("prefix 'mem:'can best be handled via temp-files, or all data should be incoded in the path-string"),
-            "s3" => panic!("{path}: S3 still has to be implemented."),
-            prefix => panic!("get_parquet_iter not implemented for prefix {prefix} of path {path}")
-            };
+    // we differentiate at this level for the different types of inputs as lower levels can not handle this more generic
+    // as the Associated types are in the way on ChunkReader, and also on SerializedFileReader as it wants to see the generic.
+    // handling it at this level introduces some source-code-duplication, but that is manageable.
+    let (ri_res, parquet_metadata) = match path.split(':').next().unwrap() {
+        prefix if path.len() == prefix.len() => {
+                let reader = SerializedFileReader::try_from(path.to_owned()).unwrap();
+                let parquet_metadata = reader.metadata().clone();
+                let ri_res = RowIter::from_file_into(Box::new(reader))
+                    .project(proj);
+                (ri_res, parquet_metadata)        
+            }
+        "mem" =>panic!("prefix 'mem:'can best be handled via temp-files, or all data should be incoded in the path-string"),
+        "s3" => {
+            let parts: Vec<&str> = path.split(":").collect();
+            assert_eq!(parts.len(), 3, "Path should have format \"s3:<bucket>:<object_name>\".");
+            let bucket_name = parts[1].to_string();
+            let object_name = parts[2].to_owned();
+            let chunk_reader = S3Reader::new(bucket_name, object_name, 100*1024);
 
-        if ri_res.is_err() {
-            println!("Opening {path} failed with error: {:?}", ri_res.err());
-            return None;
-        } 
+            let reader = SerializedFileReader::new(chunk_reader).unwrap();
+            let parquet_metadata = reader.metadata().clone();
+            let ri_res = RowIter::from_file_into(Box::new(reader))
+                .project(proj);
+            (ri_res, parquet_metadata)        
+        }
+        prefix => panic!("get_parquet_iter not implemented for prefix {prefix} of path {path}")
+        };
+
+    if ri_res.is_err() {
+        println!("Opening {path} failed with error: {:?}", ri_res.err());
+        return None;
+    } 
+
+    let row_iter = ri_res.unwrap();
+
+    Some((row_iter, parquet_metadata))
+}
     
-        let row_iter = ri_res.unwrap();
-    
-        Some((row_iter, parquet_metadata))
-    }
-    
+
+// failed experiment
+// /// get a parquet-reader directly from a chunk-reader, such that I can pass in the dependency.
+// /// This ensure the current libary parquet_ops does not need to depend on s3_file to allow for AWS access, as the chunck_reader is passed in.
+// fn get_parquet_iter_from_chunkreader<'a, CR>(chunk_reader: &'a dyn ChunkReader<T = CR>, message_type: Option<&'a str>) -> Option<(RowIter<'a>, ParquetMetaData)> {
+//     //    let proj = parse_message_type(message_type).ok();
+//     let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
+
+//     let reader = SerializedFileReader::new(chunk_reader).unwrap();
+//     let parquet_metadata = reader.metadata().clone();
+//     let ri_res = RowIter::from_file_into(Box::new(reader))
+//         .project(proj);
+//     let row_iter = ri_res.unwrap();
+
+//     Some((row_iter, parquet_metadata))
+// }
+
+
 
 // failed experiment: Associated Type is manditory, so I can not generalize
 //
@@ -133,21 +185,21 @@ pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &
 
     let mut data = Vec::new();
 
-//    let mut sum = 0;
-//    let mut last_idx = 0;
+   let mut sum = 0;
+   let mut last_idx = 0;
     for (i, row) in res.enumerate() {
-        // println!("result {i}:  {row:?}");
-        // if let Ok(amount) = row.get_int(1) {
-        //     println!("{i} has amount={amount}");
-        //     sum += amount;
-        // }
+        println!("\nresult {i}:  {row:?}   already accumulated {sum}");
+        if let Ok(amount) = row.get_int(1) {
+            println!("{i} has amount={amount}");
+            sum += amount;
+        }
         data.push(row);
 
         if i > max_rows { break; }
 //        last_idx = i;
     }
 
-//    println!("iterated over {last_idx}  fields with total amount = {sum}");
+    println!("iterated over {last_idx}  fields with total amount = {sum}");
 
     data
 }
