@@ -1,7 +1,8 @@
 
 use std::{
     cmp::Ordering,
-    io::Write,
+    fs,
+    io,
     slice::Iter,
     sync::{Arc, mpsc::Receiver},
     time::{Instant, Duration}
@@ -11,14 +12,18 @@ use parquet::{
     data_type::{Int32Type, Int64Type, ByteArrayType, ByteArray},
     errors::Result,
     file::{
-        properties::WriterProperties,
-        writer::{SerializedFileWriter, SerializedColumnWriter}
+        metadata::RowGroupMetaData,
+        writer::{
+            SerializedRowGroupWriter,
+            SerializedColumnWriter}
     },
     record::{Row,
         RowAccessor
     },
     schema::types::Type
 };
+use s3_file::S3Writer;
+use crate::parquet_writer::{self, ParquetWriter};
 
 // use memory_stats::memory_stats;
 
@@ -31,17 +36,49 @@ use parquet::{
 // }
 
 
-pub struct RowWriter<W: Write> {
+enum RowGroupWriter<'a> {
+    File(SerializedRowGroupWriter<'a, io::BufWriter<fs::File>>),
+    S3(SerializedRowGroupWriter<'a, S3Writer>)
+}
+
+// to-check: weird bound suggested by compiler <'a: 'b, ....>
+impl<'a> RowGroupWriter<'a> {
+    fn next_column(&mut self) -> Option<SerializedColumnWriter<'_>> {
+        match self {
+            RowGroupWriter::File(rgw) => rgw.next_column().unwrap(),
+            RowGroupWriter::S3(rgw) => rgw.next_column().unwrap()
+        }
+    }
+
+//     // to-check: weird bound suggested by compiler <'a: 'b, ....>
+// impl<'a> RowGroupWriter<'a> {
+//     fn next_column<'b: 'a>(&'a mut self) -> Option<SerializedColumnWriter<'b>> {
+//         match self {
+//             RowGroupWriter::File(rgw) => rgw.next_column().unwrap(),
+//             RowGroupWriter::S3(rgw) => rgw.next_column().unwrap()
+//         }
+//     }
+
+    fn close(self) -> Result<Arc<RowGroupMetaData>>{
+        match self {
+            RowGroupWriter::File(rgw) => rgw.close(),
+            RowGroupWriter::S3(rgw) => rgw.close()
+        }
+    }
+}
+
+pub struct RowWriter {
     schema: Arc<Type>,
-    row_writer: SerializedFileWriter::<W>
+    parquet_writer: ParquetWriter
 }
 
 
-impl<W: Write> RowWriter<W> {
+impl RowWriter {
 
-    pub fn channel_writer(to_write: Receiver<Vec<Row>>, writer: W, schema: Arc<Type>) -> Result<()> {
+    /// create a row-writer and attach to the channel. The row-writer will be closed when the sender closes the channel.
+    pub fn channel_writer(to_write: Receiver<Vec<Row>>, path: &str, schema: Arc<Type>) -> Result<()> {
 
-        let mut row_writer = Self::create_writer(writer, schema)?;
+        let mut row_writer = Self::create_writer(path, schema)?;
 
         let mut total_duration = Duration::new(0, 0);
 
@@ -56,45 +93,50 @@ impl<W: Write> RowWriter<W> {
         }
         println!("Input-channel has been termined. Now closing down!");
 
-        row_writer.close()?;
+        match row_writer.parquet_writer {
+            ParquetWriter::FileWriter(writer) => writer.close().unwrap(),
+            ParquetWriter::S3Writer(writer) => writer.close().unwrap()
+        };
+    
         println!(" Total write duration {total_duration:?}");
 
         Ok(())
     }
 
 
-    fn create_writer(writer: W, schema: Arc<Type>) ->  Result<RowWriter<W>> {
+    fn create_writer(path: &str, schema: Arc<Type>) ->  Result<RowWriter> {
         
-        let props = Arc::new(WriterProperties::builder()
-        .set_compression(Compression::SNAPPY)
-        .build());
-
-        let schema_clone = schema.clone();
+        let schema_clone = Arc::clone(&schema);
+        let parquet_writer = parquet_writer::get_parquet_writer(path, schema_clone);
         
         let row_writer = RowWriter {
-            row_writer: SerializedFileWriter::<_>::new(writer, schema_clone, props).unwrap(),
+            parquet_writer,
             schema
         };
         Ok(row_writer)
     }
 
-    fn close(self) -> Result<()> {
-        let _filemetadata = self.row_writer.close()?;
-        Ok(())
-    }
+    // fn close(self) -> Result<()> {
+    //     let _filemetadata = self.parquet_writer.close()?;
+    //     Ok(())
+    // }
 
 
 
-    pub fn write_row_group(&mut self, buffer: Vec<Row>) -> Result<Duration> {
+    fn write_row_group(&mut self, buffer: Vec<Row>) -> Result<Duration> {
 
         let timer = Instant::now();
 
-        let mut row_group_writer = self.row_writer.next_row_group().unwrap();
+        let mut row_group_writer =  match &mut self.parquet_writer {
+            ParquetWriter::FileWriter(ref mut writer) => RowGroupWriter::File(writer.next_row_group().unwrap()),
+            ParquetWriter::S3Writer(ref mut writer) => RowGroupWriter::S3(writer.next_row_group().unwrap())
+        };
 
         for (idx, field) in self.schema.get_fields().iter().enumerate() {
-
-            if let Some(mut col_writer) = row_group_writer.next_column().unwrap() {
+    {
+            if let Some(mut col_writer) = row_group_writer.next_column() {
                 match field.get_basic_info().converted_type() {
+                    // TODO: Add the Decimal type (and a few others)
                     ConvertedType::INT_64 => write_i64_column(buffer.iter(), idx, &mut col_writer)?,
                     ConvertedType::UINT_64 => write_u64_column(buffer.iter(), idx, &mut col_writer)?,
                     ConvertedType::INT_32 => write_i32_column(buffer.iter(), idx, &mut col_writer)?,
@@ -118,6 +160,7 @@ impl<W: Write> RowWriter<W> {
             } else {
                 panic!("Could not find a column-writer for column {idx} containing {:#?}", field)
             }
+        }
         }
         row_group_writer.close()?;
 

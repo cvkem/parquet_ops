@@ -8,25 +8,20 @@ use std::{
     fs,
     io,
     path::Path, 
-    sync::Arc,
     time::Instant};
 use parquet::{
-    basic::Compression,
     data_type::{Int32Type, Int64Type, ByteArrayType, ByteArray},
     file::{
-        properties::WriterProperties,
         writer::SerializedFileWriter,
         reader::SerializedFileReader,
         reader::FileReader
     },
-    schema::{parser::parse_message_type,
-        types::Type}
+    schema::types::Type
 };
-use s3_file::S3Writer;
 
 use super::ttypes;
 
-use super::parquetwriter::{self, ParquetWriter};
+use super::parquet_writer::{self, ParquetWriter};
 
 
 // return the type of a ref as a static string
@@ -155,7 +150,6 @@ fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>,
                         .expect("writing i32 column");
                 },
             3 => {
-                let timebase = 1644537600;   // epoch-secs on 11-12-2022 
                 let values: Vec<i64> = rec_ids
                     .map(ttypes::find_time)
                     .collect();
@@ -187,7 +181,8 @@ pub fn write_parquet(path: &str, extra_columns: usize, num_recs: Option<u64>, gr
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
 
     let now = Instant::now();
-    let mut pw = parquetwriter::get_parquet_writer(path, extra_columns);
+    let schema = ttypes::get_schema(extra_columns);
+    let mut pw = parquet_writer::get_parquet_writer(path, schema);
     
     let mut start = 0;
     let end = num_recs.unwrap_or(1000);

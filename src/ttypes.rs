@@ -1,4 +1,10 @@
 // types used for testing
+use std::sync::Arc;
+
+use parquet::schema::{
+  parser::parse_message_type,
+  types::Type};
+
 
 pub const MESSAGE_TYPE: &str = "
 message schema {
@@ -34,7 +40,7 @@ macro_rules! NESTED_MESSAGE_FORMAT {() => ("message schema {{
 ")}
 
 /// get a schema for test-data with 'num_extra_columns'  additional column named extra_XY.
-pub fn get_schema_str(num_extra_columns: usize) -> String {
+fn get_schema_str(num_extra_columns: usize) -> String {
 let columns = (0..num_extra_columns)
 //    .iter()
   .map(|idx| format!("REQUIRED BINARY extra_{:02?} (UTF8);", idx))
@@ -45,7 +51,7 @@ let columns = (0..num_extra_columns)
 }
 
 /// get a nested schema for test-data with 'num_extra_columns'  additional column named extra_XY.
-pub fn get_nested_schema_str(num_extra_columns: usize) -> String {
+fn get_nested_schema_str(num_extra_columns: usize) -> String {
   let columns = (0..num_extra_columns)
   //    .iter()
     .map(|idx| format!("REPEATED BINARY extra_{:02?} (UTF8);", idx))
@@ -56,6 +62,15 @@ pub fn get_nested_schema_str(num_extra_columns: usize) -> String {
   }
   
 
+pub fn get_schema(num_extra_columns: usize) -> Arc<Type> {
+  let message_type = if NESTED {
+    Box::new(get_nested_schema_str(num_extra_columns))
+  } else { 
+      Box::new(get_schema_str(num_extra_columns)) 
+  };
+  let schema = parse_message_type(&message_type).unwrap(); 
+  Arc::new(schema)
+}
 
 
 pub const NESTED: bool = false;

@@ -2,6 +2,7 @@
 
 use std::{ 
     fs,
+    io,
     path::Path, 
     sync::Arc};
 use parquet::{
@@ -10,27 +11,19 @@ use parquet::{
         properties::WriterProperties,
         writer::SerializedFileWriter,
     },
-    schema::parser::parse_message_type
+    schema::types::Type
 };
 use s3_file::S3Writer;
-// TODO: this dependency should be dropped. However, requires get_parquet_writer to receive the schema as input.
-use super::ttypes;
 
 
 pub enum ParquetWriter {
-    FileWriter(SerializedFileWriter<fs::File>),
+    FileWriter(SerializedFileWriter<io::BufWriter<fs::File>>),
     S3Writer(SerializedFileWriter<S3Writer>)
 }
 
 /// Parse the string and return a ParquetWriter with the corresponding type.
-pub fn get_parquet_writer(path: &str, extra_columns: usize) -> ParquetWriter {
+pub fn get_parquet_writer(path: &str, schema: Arc<Type>) -> ParquetWriter {
     // TODO: at this location we are still tightly lined to the test-types (ttypes)
-    let message_type = if ttypes::NESTED {
-        Box::new(ttypes::get_nested_schema_str(extra_columns))
-    } else { 
-        Box::new(ttypes::get_schema_str(extra_columns)) 
-    };
-    let schema = Arc::new(parse_message_type(&message_type).unwrap());
     let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
         .build());
@@ -39,8 +32,14 @@ pub fn get_parquet_writer(path: &str, extra_columns: usize) -> ParquetWriter {
     match parts.len() {
         1 => { 
             let path = Path::new(path);
-            let file = fs::File::create(&path).unwrap();
-            let writer = SerializedFileWriter::new(file, schema, props).unwrap();
+            let file = fs::OpenOptions::new()
+                                .write(true)
+                                .create(true)
+                                .truncate(true)
+                                .open(path)
+                                .unwrap();
+            let buf_file = io::BufWriter::new(file);
+            let writer = SerializedFileWriter::new(buf_file, schema, props).unwrap();
             ParquetWriter::FileWriter(writer)
         },
         3 => {

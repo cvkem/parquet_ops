@@ -5,8 +5,7 @@ use parquet::{
         file::{
             reader::{
                 SerializedFileReader,
-                FileReader,
-                ChunkReader}, 
+                FileReader}, 
             metadata::ParquetMetaData},
         schema::parser::parse_message_type,
         record::{Row,

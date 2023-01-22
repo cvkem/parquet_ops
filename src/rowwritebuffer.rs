@@ -26,12 +26,13 @@ impl RowWriteBuffer {
     pub fn new(path: &str, schema: Arc<Type>, group_size: usize) -> Result<RowWriteBuffer> {
         let (write_sink, rec_buffer) = mpsc::sync_channel(2);
 
-        let schema_clone = schema.clone();
         let path_clone = path.to_owned();
 
         let writer_handle = thread::spawn(move || {
-            let writer = create_writer(&path_clone);
-            match rowwriter::RowWriter::channel_writer(rec_buffer, writer, schema_clone) {
+//            let writer = create_writer(&path_clone);
+
+            // here a channel-writer is started and will run until the rec_buffer is closed by the sender (all senders)
+            match rowwriter::RowWriter::channel_writer(rec_buffer, &path_clone, schema) {
                 Ok(()) => println!("File {path_clone:?} written"),
                 Err(err) => println!("Writing file failed with errors {:?}", err)
             }
