@@ -57,16 +57,16 @@ async fn main() {
                 .build()
                 .unwrap();
             rt.block_on(async move {
-                parquet_ops::write_parquet_s3(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap()
+                parquet_ops::write_parquet(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap()
             });
         }));    
     } else {
-        parquet_ops::write_parquet_s3(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap()
+        parquet_ops::write_parquet(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap()
     }
  
     println!("Creating file with odd-rows in {:?} on the main thread", &path_2);        
 // //    let odd_handle = thread::spawn(move || parquet_ops::write_parquet_s3(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
-    parquet_ops::write_parquet_s3(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).expect("write odd vlaue on main failed");        
+    parquet_ops::write_parquet(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).expect("write odd vlaue on main failed");        
 
     if PARALLEL {
         if let Some(handle) = even_handle {

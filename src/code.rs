@@ -22,51 +22,15 @@ use parquet::{
     schema::{parser::parse_message_type,
         types::Type}
 };
+use s3_file::S3Writer;
+
+use super::ttypes;
 
 
 
 // return the type of a ref as a static string
 fn type_of<T>(_: &T) -> &'static str {
     type_name::<T>()
-}
-
-const NESTED: bool = false;
-
-
-use super::ttypes;
-
-const NUM_TX_PER_ACCOUNT: u64 = 10;
-
-// extract a label from a number
-fn make_label(idx: u64) -> String {
-    let mut idx = idx / NUM_TX_PER_ACCOUNT;  // first part is amount.
-    let mut stack = Vec::new();
-    for _i in 1..7 {
-        let val =  (idx % 26) as u32 + ('a' as u32);
-        stack.push(char::from_u32(val).unwrap());
-        idx /= 26;
-    }
-    let s: String = stack.into_iter().rev().collect();
-    s
-}
-
-
-// extract an amount from a number
-fn find_amount(idx: u64) -> i32 {
-    (idx % NUM_TX_PER_ACCOUNT) as i32 - (NUM_TX_PER_ACCOUNT as i32)/2 + 1
-}
-
-const BASE: u64 = 123456789;
-
-fn find_text(col: i16, idx: u64) -> String {
-    let mut seed = col as u64 * BASE + idx;
-    let mut chars = Vec::new();
-    for _i in 0..100 {
-        let val =  (seed % 26) as u32 + ('a' as u32);
-        chars.push(char::from_u32(val).unwrap());
-        seed /= 2;
-    } 
-    chars.into_iter().collect()
 }
 
 
@@ -87,7 +51,7 @@ fn write_parquet_row_group_nested<W: io::Write>(writer: &mut SerializedFileWrite
                 let values: Vec<_> = (start..end)
                     .map(|i| {
 //                        let bs = ;
-                        ByteArray::from(make_label(i).as_bytes().to_vec())
+                        ByteArray::from(ttypes::make_label(i).as_bytes().to_vec())
                     } )
                     .collect();
 
@@ -116,7 +80,7 @@ fn write_parquet_row_group_nested<W: io::Write>(writer: &mut SerializedFileWrite
             1 => {
                     let distinct = 1000 as u64;
                     let values: Vec<i32> =  (start..end)
-                        .map(|i| find_amount(i))
+                        .map(|i| ttypes::find_amount(i))
                         .collect();
 
                         col_writer
@@ -126,7 +90,7 @@ fn write_parquet_row_group_nested<W: io::Write>(writer: &mut SerializedFileWrite
                 },
             col_idx => {
                     let values: Vec<_> =  (start..end)
-                        .map(|i| ByteArray::from(find_text(col_idx, i).as_bytes().to_vec()))
+                        .map(|i| ByteArray::from(ttypes::find_text(col_idx, i).as_bytes().to_vec()))
                         .collect();
                 // println!("Now writing values with repetition {:?} of length {}", &repetition, &repetition.len());
                 col_writer
@@ -171,7 +135,7 @@ fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>,
             1 => {
                 let values: Vec<_> = rec_ids
                     .map(|i| {
-                        ByteArray::from(make_label(i).as_bytes().to_vec())
+                        ByteArray::from(ttypes::make_label(i).as_bytes().to_vec())
                     } )
                     .collect();
                 col_writer
@@ -182,7 +146,7 @@ fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>,
             2 => {
                     let distinct = 1000 as u64;
                     let values: Vec<i32> =  rec_ids
-                        .map(find_amount)
+                        .map(ttypes::find_amount)
                         .collect();
                 col_writer
                         .typed::<Int32Type>()
@@ -192,7 +156,7 @@ fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>,
             3 => {
                 let timebase = 1644537600;   // epoch-secs on 11-12-2022 
                 let values: Vec<i64> = rec_ids
-                    .map(|i| ((i as i64) + timebase) * 1000)
+                    .map(ttypes::find_time)
                     .collect();
                 col_writer
                     .typed::<Int64Type>()
@@ -201,7 +165,7 @@ fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>,
             },
                 col_idx => {
                 let values: Vec<_> = rec_ids
-                    .map(|i| ByteArray::from(find_text(col_idx, i).as_bytes().to_vec()))
+                    .map(|i| ByteArray::from(ttypes::find_text(col_idx, i).as_bytes().to_vec()))
                     .collect();
                 col_writer
                         .typed::<ByteArrayType>()
@@ -217,40 +181,55 @@ fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>,
 
 }
 
+enum ParquetWriter {
+    FileWriter(SerializedFileWriter<fs::File>),
+    S3Writer(SerializedFileWriter<S3Writer>)
+}
 
-// fn get_parquet_writer<'a, W: io::Write>(path: &str, extra_columns: usize) -> Box<SerializedFileWriter<W>>{
-//     let long_schema =  ttypes::get_schema_str(extra_columns);
-//     let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else { &long_schema };
-//     let schema = Arc::new(parse_message_type(message_type).unwrap());
-//     let props = Arc::new(WriterProperties::builder()
-//         .set_compression(Compression::SNAPPY)
-//         .build());
+/// Parse the string and return a ParquetWriter with the corresponding type.
+fn get_parquet_writer(path: &str, extra_columns: usize) -> ParquetWriter {
+//    let long_schema =  ttypes::get_schema_str(extra_columns);
+    let message_type = if ttypes::NESTED {
+        Box::new(ttypes::get_nested_schema_str(extra_columns))
+    } else { 
+        Box::new(ttypes::get_schema_str(extra_columns)) 
+    };
+    let schema = Arc::new(parse_message_type(&message_type).unwrap());
+    let props = Arc::new(WriterProperties::builder()
+        .set_compression(Compression::SNAPPY)
+        .build());
 
-//     let path = Path::new(path);
-//     let file = fs::File::create(&path).unwrap();
-//     let mut writer = SerializedFileWriter::new(file, schema, props).unwrap();
+    let parts: Vec<&str> = path.split(":").collect();
+    match parts.len() {
+        1 => { 
+            let path = Path::new(path);
+            let file = fs::File::create(&path).unwrap();
+            let writer = SerializedFileWriter::new(file, schema, props).unwrap();
+            ParquetWriter::FileWriter(writer)
+        },
+        3 => {
+            assert_eq!(parts[0], "s3");
+            let block_size = 10_000_000;
+            let bucket_name = parts[1].to_string();
+            let object_name = parts[2].to_owned();
+        
+            let file = s3_file::S3Writer::new(bucket_name, object_name, block_size);
+            
+            let writer = SerializedFileWriter::new(file, schema, props).unwrap();
+            ParquetWriter::S3Writer(writer)
+        
+        },
+        _  => panic!("File-path should have no colon (:) or S3-path should have format \"s3:<bucket>:<object_name>\".")
+    }
+}
 
-//     Box::new(writer)
-// }
 
 pub fn write_parquet(path: &str, extra_columns: usize, num_recs: Option<u64>, group_size: Option<u64>,
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
 
-    let long_schema =  ttypes::get_schema_str(extra_columns);
-    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else { &long_schema };
-    let schema = Arc::new(parse_message_type(message_type).unwrap());
-    let props = Arc::new(WriterProperties::builder()
-        .set_compression(Compression::SNAPPY)
-        .build());
-
-    let path = Path::new(path);
-    let file_writer = fs::File::create(&path).unwrap();
-    
     let now = Instant::now();
-
-    let mut writer = SerializedFileWriter::new(file_writer, schema, props).unwrap();
-//    let writer = get_parquet_writer(path, extra_columns);
-
+    let mut pw = get_parquet_writer(path, extra_columns);
+    
     let mut start = 0;
     let end = num_recs.unwrap_or(1000);
     let group_size = group_size.unwrap_or(60);
@@ -258,70 +237,33 @@ pub fn write_parquet(path: &str, extra_columns: usize, num_recs: Option<u64>, gr
     while start < end {
         let group_end = cmp::min(start+group_size, end);
 
-        if NESTED {
-            write_parquet_row_group_nested(&mut writer, start, group_end);
+        if ttypes::NESTED {
+            // match type to call the right type of writer
+            match &mut pw {
+                ParquetWriter::FileWriter(ref mut writer) => write_parquet_row_group_nested(writer, start, group_end),
+                ParquetWriter::S3Writer(ref mut writer) => write_parquet_row_group_nested(writer, start, group_end)
+            }
         } else {
-            write_parquet_row_group(&mut writer, start, group_end, selection);
+            match &mut pw {
+                ParquetWriter::FileWriter(ref mut writer) => write_parquet_row_group(writer, start, group_end, selection),
+                ParquetWriter::S3Writer(ref mut writer) => write_parquet_row_group(writer, start, group_end, selection)
+            }
         }
 
         let last = group_end -1;
-        println!("End of group {} in {:?} has value {} is account {} with amount {}", ng, now.elapsed(), last, make_label(last), find_amount(last));
+        println!("End of group {} in {:?} has value {} is account {} with amount {}", ng, now.elapsed(), last, ttypes::make_label(last), ttypes::find_amount(last));
         start += group_size;
         ng += 1;
     }
 
-    writer.close().unwrap();
+    match pw {
+        ParquetWriter::FileWriter(writer) => writer.close().unwrap(),
+        ParquetWriter::S3Writer(writer) => writer.close().unwrap()
+    };
+
     Ok(())
 }
 
-
-pub fn write_parquet_s3(path: &str, extra_columns: usize, num_recs: Option<u64>, group_size: Option<u64>,
-    selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
-
-    let long_schema =  ttypes::get_schema_str(extra_columns);
-    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else { &long_schema };
-    let schema = Arc::new(parse_message_type(message_type).unwrap());
-    let props = Arc::new(WriterProperties::builder()
-        .set_compression(Compression::SNAPPY)
-        .build());
-
-//    let file = fs::File::create(&path).unwrap();
-    let block_size = 10_000_000;
-
-    let parts: Vec<&str> = path.split(":").collect();
-    assert_eq!(parts.len(), 3, "Path should have format \"s3:<bucket>:<object_name>\".");
-    let bucket_name = parts[1].to_string();
-    let object_name = parts[2].to_owned();
-
-    let file = s3_file::S3Writer::new(bucket_name, object_name, block_size);
-    
-    let now = Instant::now();
-
-    let mut writer = SerializedFileWriter::new(file, schema, props).unwrap();
-//    let writer = get_parquet_writer(path, extra_columns);
-
-    let mut start = 0;
-    let end = num_recs.unwrap_or(1000);
-    let group_size = group_size.unwrap_or(60);
-    let mut ng = 1;
-    while start < end {
-        let group_end = cmp::min(start+group_size, end);
-
-        if NESTED {
-            write_parquet_row_group_nested(&mut writer, start, group_end);
-        } else {
-            write_parquet_row_group(&mut writer, start, group_end, selection);
-        }
-
-        let last = group_end -1;
-        println!("End of group {} in {:?} has value {} is account {} with amount {}", ng, now.elapsed(), last, make_label(last), find_amount(last));
-        start += group_size;
-        ng += 1;
-    }
-
-    writer.close().unwrap();
-    Ok(())
-}
 
 
 
