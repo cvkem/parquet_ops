@@ -6,7 +6,6 @@ use std::{
     thread
 };
 use std::time::Instant;
-use std::any::type_name;
 use parquet_ops;
 
 

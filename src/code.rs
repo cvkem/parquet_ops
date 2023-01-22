@@ -70,7 +70,7 @@ fn find_text(col: i16, idx: u64) -> String {
 }
 
 
-fn write_parquet_row_group_nested(writer: &mut SerializedFileWriter<fs::File>, start: u64, end: u64) {
+fn write_parquet_row_group_nested<W: io::Write>(writer: &mut SerializedFileWriter<W>, start: u64, end: u64) {
     let mut row_group_writer = writer.next_row_group().unwrap();
     let mut col_nr = 0;
 
@@ -146,7 +146,7 @@ fn write_parquet_row_group_nested(writer: &mut SerializedFileWriter<fs::File>, s
 
 
 
-fn write_parquet_row_group(writer: &mut SerializedFileWriter<fs::File>, 
+fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>, 
         start: u64, end: u64,
         selection: Option<fn(&u64) -> bool>) {
     let mut row_group_writer = writer.next_row_group().unwrap();
@@ -218,19 +218,38 @@ fn write_parquet_row_group(writer: &mut SerializedFileWriter<fs::File>,
 }
 
 
+// fn get_parquet_writer<'a, W: io::Write>(path: &str, extra_columns: usize) -> Box<SerializedFileWriter<W>>{
+//     let long_schema =  ttypes::get_schema_str(extra_columns);
+//     let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else { &long_schema };
+//     let schema = Arc::new(parse_message_type(message_type).unwrap());
+//     let props = Arc::new(WriterProperties::builder()
+//         .set_compression(Compression::SNAPPY)
+//         .build());
 
-pub fn write_parquet(path: &Path, extra_columns: usize, num_recs: Option<u64>, group_size: Option<u64>,
+//     let path = Path::new(path);
+//     let file = fs::File::create(&path).unwrap();
+//     let mut writer = SerializedFileWriter::new(file, schema, props).unwrap();
+
+//     Box::new(writer)
+// }
+
+pub fn write_parquet(path: &str, extra_columns: usize, num_recs: Option<u64>, group_size: Option<u64>,
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
+
     let long_schema =  ttypes::get_schema_str(extra_columns);
     let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else { &long_schema };
     let schema = Arc::new(parse_message_type(message_type).unwrap());
     let props = Arc::new(WriterProperties::builder()
         .set_compression(Compression::SNAPPY)
         .build());
-    let file = fs::File::create(&path).unwrap();
-    let mut writer = SerializedFileWriter::new(file, schema, props).unwrap();
 
+    let path = Path::new(path);
+    let file_writer = fs::File::create(&path).unwrap();
+    
     let now = Instant::now();
+
+    let mut writer = SerializedFileWriter::new(file_writer, schema, props).unwrap();
+//    let writer = get_parquet_writer(path, extra_columns);
 
     let mut start = 0;
     let end = num_recs.unwrap_or(1000);
@@ -254,6 +273,56 @@ pub fn write_parquet(path: &Path, extra_columns: usize, num_recs: Option<u64>, g
     writer.close().unwrap();
     Ok(())
 }
+
+
+pub fn write_parquet_s3(path: &str, extra_columns: usize, num_recs: Option<u64>, group_size: Option<u64>,
+    selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
+
+    let long_schema =  ttypes::get_schema_str(extra_columns);
+    let message_type = if NESTED {ttypes::LONG_NESTED_MESSAGE_TYPE} else { &long_schema };
+    let schema = Arc::new(parse_message_type(message_type).unwrap());
+    let props = Arc::new(WriterProperties::builder()
+        .set_compression(Compression::SNAPPY)
+        .build());
+
+//    let file = fs::File::create(&path).unwrap();
+    let block_size = 10_000_000;
+
+    let parts: Vec<&str> = path.split(":").collect();
+    assert_eq!(parts.len(), 3, "Path should have format \"s3:<bucket>:<object_name>\".");
+    let bucket_name = parts[1].to_string();
+    let object_name = parts[2].to_owned();
+
+    let file = s3_file::S3Writer::new(bucket_name, object_name, block_size);
+    
+    let now = Instant::now();
+
+    let mut writer = SerializedFileWriter::new(file, schema, props).unwrap();
+//    let writer = get_parquet_writer(path, extra_columns);
+
+    let mut start = 0;
+    let end = num_recs.unwrap_or(1000);
+    let group_size = group_size.unwrap_or(60);
+    let mut ng = 1;
+    while start < end {
+        let group_end = cmp::min(start+group_size, end);
+
+        if NESTED {
+            write_parquet_row_group_nested(&mut writer, start, group_end);
+        } else {
+            write_parquet_row_group(&mut writer, start, group_end, selection);
+        }
+
+        let last = group_end -1;
+        println!("End of group {} in {:?} has value {} is account {} with amount {}", ng, now.elapsed(), last, make_label(last), find_amount(last));
+        start += group_size;
+        ng += 1;
+    }
+
+    writer.close().unwrap();
+    Ok(())
+}
+
 
 
 const SHOW_FIRST_GROUP_ONLY: bool = true;

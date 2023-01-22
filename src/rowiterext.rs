@@ -196,10 +196,10 @@ pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &
         data.push(row);
 
         if i > max_rows { break; }
-//        last_idx = i;
+        last_idx = i;
     }
 
-    println!("iterated over {last_idx}  fields with total amount = {sum}");
+    println!("iterated over {last_idx}  rows with total amount = {sum}");
 
     data
 }
