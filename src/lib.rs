@@ -9,7 +9,6 @@ pub use self::{
 
 mod rowiterext;
 mod rowwritebuffer;
-mod rowwriter;
 mod merge;
 mod code;
 mod ttypes;

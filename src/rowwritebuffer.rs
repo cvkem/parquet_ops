@@ -10,7 +10,8 @@ use parquet::{
     record::{Field, Row},
     schema::types::Type
 };
-use crate::rowwriter;
+
+mod rowwriter;
 
 pub struct RowWriteBuffer {
     max_row_group: usize,

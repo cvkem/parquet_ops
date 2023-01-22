@@ -8,6 +8,7 @@ use parquet::{
 use super::rowiterext::RowIterExt;
 use super::rowwritebuffer::RowWriteBuffer;
 
+const REPORT_APPEND_STEP: i64 = 10_000;  // 1 in REPORT_APPEND_STEP rows is reported on the console.
 
 pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Row) -> bool) {
 
@@ -24,7 +25,7 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
     let mut row_writer = RowWriteBuffer::new(merged_path, schema, 10000).unwrap();
 
     let mut row_processor = |row: Row| {
-        if row.get_long(0).unwrap() % 10000 == 0 {
+        if row.get_long(0).unwrap() % REPORT_APPEND_STEP == 0 {
             println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap());
         }
         row_writer.append_row(row);
