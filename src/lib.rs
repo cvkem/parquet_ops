@@ -8,6 +8,7 @@ pub use self::{
 };
 
 mod rowiterext;
+mod parquetwriter;
 mod rowwritebuffer;
 mod merge;
 mod code;
