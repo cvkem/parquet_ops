@@ -8,7 +8,7 @@ use parquet::{
 use super::rowiterext::RowIterExt;
 use super::rowwritebuffer::RowWriteBuffer;
 
-const REPORT_APPEND_STEP: i64 = 10_000;  // 1 in REPORT_APPEND_STEP rows is reported on the console.
+const REPORT_APPEND_STEP: i64 = 100;  // 1 in REPORT_APPEND_STEP rows is reported on the console.
 
 pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Row) -> bool) {
 
@@ -35,6 +35,7 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
         match row_iters.len() {
             0 => break,  // we are ready
             1 => {
+                    println!("TMP: DRAINING the last one");
                     row_iters[0].drain(&mut row_processor);
                     row_iters.remove(0);
             },
@@ -52,6 +53,8 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
                     let (head, ready) = row_iters[min_pos].update_head();         
                     row_processor(head);
                     if  ready {
+                        println!("TMP: RowIter at {min_pos} is Ready, so closing 1 out of {}", row_iters.len() );
+
                         let _ = row_iters.swap_remove(min_pos);
                     }
                 } else {
