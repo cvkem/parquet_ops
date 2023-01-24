@@ -47,7 +47,8 @@ fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
 }
 
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut args = env::args();
     println!("Program name = {}", args.next().unwrap());
     println!("Works on local files, unless you provide argument 's3' as first argument, as it operates on bucket 'parquet-exp' in s3.");
@@ -55,22 +56,23 @@ fn main() {
 
     if action == "s3" {
 
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-//            .thread_name("CvK-tokio-merge")
-            .thread_name_fn(|| {
-                static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
-                let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
-                format!("CvK-merge-pool-{}", id)
-             })
-            .on_thread_start(|| {
-                println!("thread started with name '{:?}'", thread::current().name());
-            })
-             .build()
-            .unwrap();
-        rt.block_on(async {
-            the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
-        });
+//         let rt = tokio::runtime::Builder::new_multi_thread()
+//             .enable_all()
+// //            .thread_name("CvK-tokio-merge")
+//             .thread_name_fn(|| {
+//                 static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+//                 let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
+//                 format!("CvK-merge-pool-{}", id)
+//              })
+//             .on_thread_start(|| {
+//                 println!("thread started with name '{:?}'", thread::current().name());
+//             })
+//              .build()
+//             .unwrap();
+//         rt.block_on(async {
+//             the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
+//         });
+        the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
 
     } else { // operate on local file-system
 

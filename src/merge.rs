@@ -8,7 +8,7 @@ use parquet::{
 use super::rowiterext::RowIterExt;
 use super::rowwritebuffer::RowWriteBuffer;
 
-const REPORT_APPEND_STEP: i64 = 100;  // 1 in REPORT_APPEND_STEP rows is reported on the console.
+const REPORT_APPEND_STEP: i64 = 100; //10_000  // 1 in REPORT_APPEND_STEP rows is reported on the console.
 
 pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Row) -> bool) {
 

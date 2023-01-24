@@ -10,6 +10,7 @@ use parquet::{
     record::{Field, Row},
     schema::types::Type
 };
+use futures::executor::block_on;
 
 mod rowwriter;
 
@@ -17,7 +18,7 @@ pub struct RowWriteBuffer {
     max_row_group: usize,
     buffer: Vec<Row>,
     write_sink: SyncSender<Vec<Row>>,
-    writer_handle: thread::JoinHandle<()>
+    writer_handle: tokio::task::JoinHandle<()>    // thread::JoinHandle<()>
 }
 
 
@@ -28,8 +29,7 @@ impl RowWriteBuffer {
 
         let path_clone = path.to_owned();
 
-        let writer_handle = thread::spawn(move || {
-//            let writer = create_writer(&path_clone);
+        let writer_handle = tokio::spawn(async move { //} || {
 
             // here a channel-writer is started and will run until the rec_buffer is closed by the sender (all senders)
             match rowwriter::RowWriter::channel_writer(rec_buffer, &path_clone, schema) {
@@ -88,8 +88,13 @@ impl RowWriteBuffer {
         drop(self.write_sink);
 
         // wait for writer to be ready
-        self.writer_handle.join().unwrap();
-
+//        self.writer_handle.join().unwrap();
+        block_on(async {
+            match self.writer_handle.await {
+                Err(err) => eprintln!("Error while closing merged file: {err:?}"),
+                Ok(_) => ()
+            }
+        })
     }
 }
 

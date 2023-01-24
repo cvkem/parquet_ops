@@ -111,7 +111,7 @@ fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<
             assert_eq!(parts.len(), 3, "Path should have format \"s3:<bucket>:<object_name>\".");
             let bucket_name = parts[1].to_string();
             let object_name = parts[2].to_owned();
-            let chunk_reader = S3Reader::new(bucket_name, object_name, 100*1024);
+            let chunk_reader = S3Reader::new(bucket_name, object_name, 10_000*1024);
 
             let reader = SerializedFileReader::new(chunk_reader).unwrap();
             let parquet_metadata = reader.metadata().clone();
