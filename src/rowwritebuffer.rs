@@ -6,7 +6,7 @@ use std::{
     thread,
 };
 use parquet::{
-    errors::Result,
+    errors::{ParquetError, Result},
     record::{Field, Row},
     schema::types::Type
 };
@@ -56,9 +56,13 @@ impl RowWriteBuffer {
     pub fn flush(&mut self) -> Result<()> {
         let rows_to_write = mem::take(&mut self.buffer);
 
-        self.write_sink.send(rows_to_write).unwrap(); // can not use ?  should use match to propagate error.
-
-        Ok(())
+        match self.write_sink.send(rows_to_write){
+            Ok(()) => Ok(()),
+            Err(err) => {
+                println!("Ran into error {err:#?}");
+                Err(ParquetError::General(format!("Error during flush: {err:#?}")))
+            }
+        }
     }
 
     pub fn append_row(&mut self, row: Row) {

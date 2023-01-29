@@ -25,7 +25,7 @@ fn get_u64_from_string(s: &str, err_msg: &str) -> Option<u64> {
 
 const NUM_EXTRA_COLUMNS: usize = 135;
 
-const PARALLEL: bool = false;
+const PARALLEL: bool = true;
 
 #[tokio::main]
 async fn main() {
@@ -51,32 +51,32 @@ async fn main() {
     println!("Creating file with even-rows in {:?}", &path_1);
     if PARALLEL {
         even_handle = Some(thread::spawn(move || {
-            // a runtime is needed for this thread
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
+            let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {
                 parquet_ops::write_parquet(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap()
             });
         }));    
     } else {
-        parquet_ops::write_parquet(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap()
+        parquet_ops::write_parquet(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap();
+        println!(" ===>  Ready writing even rows to {:?}", &path_1);
     }
  
     println!("Creating file with odd-rows in {:?} on the main thread", &path_2);        
 // //    let odd_handle = thread::spawn(move || parquet_ops::write_parquet_s3(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
-    parquet_ops::write_parquet(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).expect("write odd vlaue on main failed");        
+    parquet_ops::write_parquet(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).expect("write odd vlaue on main failed");
+    println!("Ready writing odd rows to {:?}", &path_2);
 
     if PARALLEL {
         if let Some(handle) = even_handle {
+            println!("About to join the Even-handle (parallel thread)");
+            let join_timer = Instant::now();
             handle.join().expect("Failed to join even-handle");
+            println!("joining even-handle took {:?}", join_timer.elapsed());
         }
     }
 //    odd_handle.join().expect("Failed to join odd-handle");
 
     let elapsed = timer.elapsed();
-
 
     println!("Action '{}' with duration {:?}", &action, &elapsed);
 }

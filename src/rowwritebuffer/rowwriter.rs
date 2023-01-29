@@ -95,7 +95,10 @@ impl RowWriter {
 
         match row_writer.parquet_writer {
             ParquetWriter::FileWriter(writer) => writer.close().unwrap(),
-            ParquetWriter::S3Writer(writer) => writer.close().unwrap()
+            ParquetWriter::S3Writer(writer) => {
+                println!("Calling Close on an S3Writer");
+                writer.close().unwrap()
+            }
         };
     
         println!(" Total write duration {total_duration:?}");
