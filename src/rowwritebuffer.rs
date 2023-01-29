@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     fs,
     io::{Write, BufWriter},
     mem,
@@ -33,8 +34,8 @@ impl RowWriteBuffer {
 
             // here a channel-writer is started and will run until the rec_buffer is closed by the sender (all senders)
             match rowwriter::RowWriter::channel_writer(rec_buffer, &path_clone, schema) {
-                Ok(()) => println!("File {path_clone:?} written"),
-                Err(err) => println!("Writing file failed with errors {:?}", err)
+                Ok(()) => println!("#### File {path_clone:?} written"),
+                Err(err) => println!("#### Writing file failed with errors {:?}", err)
             }
         });
 
@@ -59,7 +60,11 @@ impl RowWriteBuffer {
         match self.write_sink.send(rows_to_write){
             Ok(()) => Ok(()),
             Err(err) => {
-                println!("Ran into error {err:#?}");
+                println!("ERROR during flush (sending to write_sink):");
+                println!("   Description: {}", err.description());
+                println!("   Source: {:?}", err.source());
+                println!("   Cause: {:?}", err.cause());
+
                 Err(ParquetError::General(format!("Error during flush: {err:#?}")))
             }
         }

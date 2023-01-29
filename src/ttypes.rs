@@ -1,9 +1,13 @@
 // types used for testing
 use std::sync::Arc;
 
-use parquet::schema::{
-  parser::parse_message_type,
-  types::Type};
+use parquet::{
+    schema::{
+      parser::parse_message_type,
+      types::Type},
+      record::{Field, Row}};
+
+use crate::rowwritebuffer;
 
 
 pub const MESSAGE_TYPE: &str = "
@@ -40,7 +44,7 @@ macro_rules! NESTED_MESSAGE_FORMAT {() => ("message schema {{
 ")}
 
 /// get a schema for test-data with 'num_extra_columns'  additional column named extra_XY.
-fn get_schema_str(num_extra_columns: usize) -> String {
+fn get_schema_str(num_extra_columns: i16) -> String {
 let columns = (0..num_extra_columns)
 //    .iter()
   .map(|idx| format!("REQUIRED BINARY extra_{:02?} (UTF8);", idx))
@@ -51,7 +55,7 @@ let columns = (0..num_extra_columns)
 }
 
 /// get a nested schema for test-data with 'num_extra_columns'  additional column named extra_XY.
-fn get_nested_schema_str(num_extra_columns: usize) -> String {
+fn get_nested_schema_str(num_extra_columns: i16) -> String {
   let columns = (0..num_extra_columns)
   //    .iter()
     .map(|idx| format!("REPEATED BINARY extra_{:02?} (UTF8);", idx))
@@ -62,7 +66,7 @@ fn get_nested_schema_str(num_extra_columns: usize) -> String {
   }
   
 
-pub fn get_schema(num_extra_columns: usize) -> Arc<Type> {
+pub fn get_test_schema(num_extra_columns: i16) -> Arc<Type> {
   let message_type = if NESTED {
     Box::new(get_nested_schema_str(num_extra_columns))
   } else { 
@@ -117,4 +121,28 @@ const TIME_MULTIPLIER: i64 = 10_000; // step-size is 10 milliseconds
 // find a time starting on dec 11 2022 and increasing by 10 Milliseconds
 pub fn find_time(idx: u64) -> i64 {
   ((idx as i64) + TIMEBASE) * TIME_MULTIPLIER
+}
+
+
+
+pub fn test_parquet_row(idx: u64, num_extra_columns: i16) -> Row {
+  let label = make_label(idx);
+  let amount = find_amount(idx);
+  let time = find_time(idx);
+
+  
+  let mut fields = Vec::new();
+
+  fields.push(("id".to_owned(), Field::Long(idx as i64)));
+  fields.push(("account".to_owned(), Field::Str(label)));
+  fields.push(("amount".to_owned(), Field::Int(amount)));
+  fields.push(("datetime".to_owned(), Field::TimestampMillis(time as u64)));
+
+  (0..num_extra_columns).for_each(|col_nr| fields.push((format!("extra_{col_nr:02}"), Field::Str(find_text(col_nr, idx)))));
+
+  let row = rowwritebuffer::create_row(fields);
+  // if idx % 1000 == 0 {
+  //     println!("Row {idx} is ready {row:#?}");
+  // }
+  row
 }

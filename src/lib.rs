@@ -1,7 +1,7 @@
 
 pub use self::{
     rowiterext::{read_parquet_rowiter},
-    merge::merge_parquet,
+    merge::{merge_parquet, merge_parquet_fake},
     legacy::{write_parquet, read_parquet_metadata},
     ttypes::MESSAGE_TYPE,
     rowwritebuffer::RowWriteBuffer

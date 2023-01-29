@@ -181,7 +181,7 @@ pub fn write_parquet(path: &str, extra_columns: usize, num_recs: Option<u64>, gr
     selection: Option<fn(&u64) -> bool>) -> Result<(), io::Error> {
 
     let now = Instant::now();
-    let schema = ttypes::get_schema(extra_columns);
+    let schema = ttypes::get_test_schema(extra_columns.try_into().unwrap());
     let mut pw = parquet_writer::get_parquet_writer(path, schema);
     
     let mut start = 0;

@@ -83,6 +83,7 @@ impl RowWriter {
         let mut total_duration = Duration::new(0, 0);
 
         let mut idx = 0;
+        println!("####   Created row-writer (to s3) now listen on channel for input.");
         for rows in to_write {
 //            show_memory_usage("before");
             let duration = row_writer.write_row_group(rows)?;
@@ -91,7 +92,7 @@ impl RowWriter {
             idx += 1;
             println!("rowgroup {idx}: Total-write-duration={total_duration:?}");
         }
-        println!("Input-channel has been termined. Now closing down!");
+        println!("####   Input-channel has been termined. Now closing down!");
 
         match row_writer.parquet_writer {
             ParquetWriter::FileWriter(writer) => writer.close().unwrap(),
