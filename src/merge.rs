@@ -14,12 +14,13 @@ pub fn merge_parquet_fake(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row
     use crate::ttypes::{get_test_schema, test_parquet_row};
 
     let num_extra_columns: i16 = 135;
+    let num_rows: u64 = 20;  // 20_000;
     let schema = get_test_schema(num_extra_columns);
 
     let mut row_writer = RowWriteBuffer::new(merged_path, schema, 10000).unwrap();
 
     println!("Fill merge_data with fake data (to circumvent the opening of multiple files)");
-    (0..20_000_u64).for_each(|id| row_writer.append_row(test_parquet_row(id, num_extra_columns)));
+    (0..num_rows).for_each(|id| row_writer.append_row(test_parquet_row(id, num_extra_columns)));
 
     println!("Closing the RowWriteBuffer (merge_fake)");
     row_writer.close();

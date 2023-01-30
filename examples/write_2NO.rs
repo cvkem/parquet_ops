@@ -23,7 +23,7 @@ fn get_u64_from_string(s: &str, err_msg: &str) -> Option<u64> {
         .expect(err_msg))
 }
 
-const num_extra_columns: usize = 135;
+const NUM_EXTRA_COLUMNS: usize = 135;
 
 
 fn main() {
@@ -32,8 +32,8 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let action = "writ";
-    let path_1 = Path::new(paths::PATH_1);
-    let path_2 = Path::new(paths::PATH_2);
+    let path_1 = paths::PATH_1;
+    let path_2 = paths::PATH_2;
 
     let timer = Instant::now();
 
@@ -44,10 +44,10 @@ fn main() {
     let group_size_cpy = group_size.clone();
 
     println!("Creating file with even-rows in {:?}", &path_1);
-    let even_handle = thread::spawn(move || parquet_ops::write_parquet(&path_1, num_extra_columns, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap());
+    let even_handle = thread::spawn(move || parquet_ops::write_parquet(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap());
  
     println!("Creating file with odd-rows in {:?}", &path_2);        
-    let odd_handle = thread::spawn(move || parquet_ops::write_parquet(&path_2, num_extra_columns, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
+    let odd_handle = thread::spawn(move || parquet_ops::write_parquet(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
 
     even_handle.join();
     odd_handle.join();

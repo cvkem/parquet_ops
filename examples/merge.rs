@@ -37,7 +37,7 @@ fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
     println!("merged '{}' and '{}' into '{}'.", &path_1, &path_2, merged_path);
     let timer = Instant::now();
 
-    parquet_ops::merge_parquet_fake(vec![path_1, path_2], merged_path, smaller_test);
+    parquet_ops::merge_parquet(vec![path_1, path_2], merged_path, smaller_test);
 
     let elapsed = timer.elapsed();
 
@@ -46,7 +46,7 @@ fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
 
 }
 
-const DEFAULT_ACTION: &str = "s3"; // "UNKNOWN"
+const DEFAULT_ACTION: &str = "s3"; // "local"
 
 #[tokio::main]
 async fn main() {
@@ -74,7 +74,7 @@ async fn main() {
 //         rt.block_on(async {
 //             the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
 //         });
-    the_merge(paths::PATH_1, paths::PATH_2, paths::MERGED_S3)
+    the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
     //the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
 
     } else { // operate on local file-system
