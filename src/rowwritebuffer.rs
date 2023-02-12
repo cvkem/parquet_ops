@@ -30,7 +30,12 @@ impl RowWriteBuffer {
 
         let path_clone = path.to_owned();
 
-        let writer_handle = tokio::spawn(async move { //} || {
+        use s3_file::async_bridge;
+
+//            let writer_handle = tokio::spawn(
+                //            #[tracing::instrument]
+        let writer_handle = async_bridge::spawn_async(
+            async move { //} || {
 
             // here a channel-writer is started and will run until the rec_buffer is closed by the sender (all senders)
             match rowwriter::RowWriter::channel_writer(rec_buffer, &path_clone, schema) {
@@ -87,6 +92,7 @@ impl RowWriteBuffer {
     // Possibly does this work well when combined with a drop trait?
     pub fn close(mut self)  {
         if self.buffer.len() > 0 {
+            println!("TMP: Buffer has length {}", self.buffer.len());
             if let Err(err) = self.flush() {
                 panic!("auto-Flush on close failed with {err}");
             }

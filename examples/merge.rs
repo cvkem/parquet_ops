@@ -34,15 +34,31 @@ fn smaller_test(row_1: &Row, row_2: &Row) -> bool {
 
 fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
 
-    println!("merged '{}' and '{}' into '{}'.", &path_1, &path_2, merged_path);
-    let timer = Instant::now();
 
-    parquet_ops::merge_parquet(vec![path_1, path_2], merged_path, smaller_test);
+    use std::thread;
 
-    let elapsed = timer.elapsed();
+    let path_1 = path_1.to_owned();
+    let path_2 = path_2.to_owned();
+    let merged_path = merged_path.to_owned();
+    let join_handle = thread::spawn( move || {
+        println!("merged '{}' and '{}' into '{}'.", &path_1, &path_2, merged_path);
+        let timer = Instant::now();
 
+        parquet_ops::merge_parquet(vec![&path_1, &path_2], &merged_path, smaller_test);
+        let elapsed = timer.elapsed();
 
-    println!("merged '{}' and '{}' into '{}' with duration {:?}.", &path_1, &path_2, merged_path, &elapsed);
+        println!("merged '{}' and '{}' into '{}' with duration {:?}.", &path_1, &path_2, merged_path, &elapsed);
+    });
+
+    let result = join_handle.join();
+    println!("Joined the merge-thread with results {result:?}");
+    match result {
+        Ok(ok) => println!("OK-result = {ok:?}"),
+        Err(err) => println!("Error is {err:?}")
+    };
+
+//    parquet_ops::merge_parquet(vec![path_1, path_2], merged_path, smaller_test);
+
 
 }
 
@@ -51,6 +67,10 @@ const DEFAULT_ACTION: &str = "s3"; // "local"
 #[tokio::main]
 async fn main() {
 //fn main() {
+    use console_subscriber;
+    println!("Staring the console-subscriber for Tokio-console");
+    console_subscriber::init();
+
     let mut args = env::args();
     println!("Program name = {}", args.next().unwrap());
     println!("Works on local files, unless you provide argument 's3' as first argument, as it operates on bucket 'parquet-exp' in s3.");
