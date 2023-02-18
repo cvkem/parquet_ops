@@ -32,16 +32,12 @@ fn smaller_test(row_1: &Row, row_2: &Row) -> bool {
 }
 
 
-fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
-
-
-    use std::thread;
-
+fn the_merge_threaded(path_1: &str, path_2: &str, merged_path: &str) {
     let path_1 = path_1.to_owned();
     let path_2 = path_2.to_owned();
     let merged_path = merged_path.to_owned();
     let join_handle = thread::spawn( move || {
-        println!("merged '{}' and '{}' into '{}'.", &path_1, &path_2, merged_path);
+        println!("On a separate THREAD about to merge '{}' and '{}' into '{}'.", &path_1, &path_2, merged_path);
         let timer = Instant::now();
 
         parquet_ops::merge_parquet(vec![&path_1, &path_2], &merged_path, smaller_test);
@@ -62,20 +58,34 @@ fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
 
 }
 
+fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
+    println!("merged '{}' and '{}' into '{}'.", &path_1, &path_2, merged_path);
+    let timer = Instant::now();
+
+    parquet_ops::merge_parquet(vec![&path_1, &path_2], &merged_path, smaller_test);
+    let elapsed = timer.elapsed();
+
+    println!("merged '{}' and '{}' into '{}' with duration {:?}.", &path_1, &path_2, merged_path, &elapsed);
+}
+
+
+
 const DEFAULT_ACTION: &str = "s3"; // "local"
 
-#[tokio::main]
-async fn main() {
-//fn main() {
-    use console_subscriber;
-    println!("Staring the console-subscriber for Tokio-console");
-    console_subscriber::init();
+// #[tokio::main]
+// async fn main() {
+//     use console_subscriber;
+//     println!("Staring the console-subscriber for Tokio-console");
+//     console_subscriber::init();
+
+fn main() {
 
     let mut args = env::args();
     println!("Program name = {}", args.next().unwrap());
     println!("Works on local files, unless you provide argument 's3' as first argument, as it operates on bucket 'parquet-exp' in s3.");
     let action = args.next().unwrap_or(DEFAULT_ACTION.to_owned());
 
+    let current_merge = the_merge;
     if action == "s3" {
 
 //         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -94,14 +104,14 @@ async fn main() {
 //         rt.block_on(async {
 //             the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
 //         });
-    the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
+    current_merge(paths::PATH_1, paths::PATH_2, paths::MERGED_S3)
     //the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
 
     } else { // operate on local file-system
 
         let (path_1, path_2, merged_path) = (paths::PATH_1, paths::PATH_2, paths::MERGED);
 
-        the_merge(path_1, path_2, merged_path);
+        current_merge(path_1, path_2, merged_path);
 
         // restructure to check output file of merge (not created yet)
         let mut bytes = [0_u8; 10];

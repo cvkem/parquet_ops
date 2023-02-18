@@ -18,8 +18,8 @@ mod rowwriter;
 pub struct RowWriteBuffer {
     max_row_group: usize,
     buffer: Vec<Row>,
-    write_sink: SyncSender<Vec<Row>>,
-    writer_handle: tokio::task::JoinHandle<()>    // thread::JoinHandle<()>
+    write_sink: Option<SyncSender<Vec<Row>>>,
+    writer_handle: Option<tokio::task::JoinHandle<()>>    // thread::JoinHandle<()>
 }
 
 
@@ -32,7 +32,8 @@ impl RowWriteBuffer {
 
         use s3_file::async_bridge;
 
-//            let writer_handle = tokio::spawn(
+        println!("TMP ###: Start a channel-writer on a separate thread");
+        //   let writer_handle = tokio::spawn(
                 //            #[tracing::instrument]
         let writer_handle = async_bridge::spawn_async(
             async move { //} || {
@@ -47,8 +48,8 @@ impl RowWriteBuffer {
         let row_writer = RowWriteBuffer {
             max_row_group: group_size,
             buffer: Vec::with_capacity(group_size),
-            write_sink,
-            writer_handle
+            write_sink: Some(write_sink),
+            writer_handle: Some(writer_handle)
         };
     
         Ok(row_writer)
@@ -62,13 +63,15 @@ impl RowWriteBuffer {
     pub fn flush(&mut self) -> Result<()> {
         let rows_to_write = mem::take(&mut self.buffer);
 
-        match self.write_sink.send(rows_to_write){
+        println!("TMP #### about to flush {} rows.", rows_to_write.len());
+
+        match self.write_sink.as_ref().expect("Write_sink should still exist (but None)").send(rows_to_write) {
             Ok(()) => Ok(()),
             Err(err) => {
                 println!("ERROR during flush (sending to write_sink):");
-                println!("   Description: {}", err.description());
+//                println!("   Description: {}", err.description());
                 println!("   Source: {:?}", err.source());
-                println!("   Cause: {:?}", err.cause());
+//                println!("   Cause: {:?}", err.cause());
 
                 Err(ParquetError::General(format!("Error during flush: {err:#?}")))
             }
@@ -90,7 +93,7 @@ impl RowWriteBuffer {
 
     // Close does consume the writer. 
     // Possibly does this work well when combined with a drop trait?
-    pub fn close(mut self)  {
+    pub fn close(&mut self)  {
         if self.buffer.len() > 0 {
             println!("TMP: Buffer has length {}", self.buffer.len());
             if let Err(err) = self.flush() {
@@ -100,12 +103,13 @@ impl RowWriteBuffer {
 
         println!("Closing the sending end of the channel.");
         // closing channel will close the writer
-        drop(self.write_sink);
+        drop(self.write_sink.take().expect("Write_sink should still exist (but None)"));
 
         // wait for writer to be ready
 //        self.writer_handle.join().unwrap();
         block_on(async {
-            match self.writer_handle.await {
+            let wh = self.writer_handle.take().unwrap();
+            match wh.await {
                 Err(err) => eprintln!("Error while closing merged file: {err:?}"),
                 Ok(_) => ()
             }
@@ -114,13 +118,20 @@ impl RowWriteBuffer {
 }
 
 
-// // failed to implement drop as it requires and owned value
-// impl<W> Drop for RowWriter<W> where 
-//     W: Write {
-//     fn drop(&mut self) {
-//         self.close();
-//     }
-// }
+impl Drop for RowWriteBuffer {
+    fn drop(&mut self) {
+        match &self.write_sink {
+            Some(ws) => println!("Write-sink exists"),
+            None => println!("No write-sink (None)")
+        };
+        match &self.writer_handle {
+            Some(wh) => println!("Writer_handle exists"),
+            None => println!("No writer_handle (None)")
+        };
+
+        println!("TMP ####  CLOSING a RowWriteBuffer !!!");
+    }
+}
 
 
 /// Create a writer based on a string that implements the std::io::Write interface.

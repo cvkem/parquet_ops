@@ -72,6 +72,7 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
 
     barriers.add_barrier();
     let mut b3: u64 = 3;
+    let mut b4: u64 = 0;
 
     let mut report = true;
 
@@ -115,13 +116,13 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
             report = false;
         }
         barriers.add_barrier();
-        let mut b4: u64 = 4;
+        b4 = 4;
 
     }
 
-    println!("Closing the RowWriteBuffer");
-    println!("Useless memory contains {}", b1 + b2 + b3);
+    println!("Closing the RowWriteBuffer  row_writer.close()");
     row_writer.close();
+    println!("Closed\nUseless memory for checks contains {} (expect 10)", b1 + b2 + b3 + b4);
 }
 
 

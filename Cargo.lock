@@ -2147,6 +2147,7 @@ dependencies = [
  "console-subscriber",
  "futures",
  "lambda_runtime",
+ "lazy_static",
  "parquet",
  "serde",
  "tokio",

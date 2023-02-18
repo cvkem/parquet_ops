@@ -84,7 +84,8 @@ impl RowWriter {
 
         let mut idx = 0;
         println!("####   Created row-writer (to s3) now listen on channel for input.");
-        for rows in to_write {
+        for rows in to_write.iter() {
+            println!("### Received a series of {} rows in channel_writer.", rows.len());
 //            show_memory_usage("before");
             let duration = row_writer.write_row_group(rows)?;
 //            show_memory_usage("after");
