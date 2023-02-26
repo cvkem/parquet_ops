@@ -18,4 +18,3 @@ mod ttypes;
 // TODO: to be dropped. Still in place for nested types??
 mod legacy;
 
-mod barrier;

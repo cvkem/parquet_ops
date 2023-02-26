@@ -1,4 +1,4 @@
-
+// This barrier is nog used anymore. It was used to show that we do not have stack-corruption, which indeed was not the case.
 
 pub struct Barrier {
     pattern: u32,

@@ -28,15 +28,15 @@ pub fn merge_parquet_fake(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row
 
 pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Row) -> bool) {
 
-    use crate::barrier::Barrier;
-    let mut barriers = Barrier::new(0xeeee, 10_000);
+    // use crate::barrier::Barrier;
+    // let mut barriers = Barrier::new(0xeeee, 10_000);
 
-    barriers.add_barrier();
-    let mut b1: u64 = 1;
+    // barriers.add_barrier();
+    // let mut b1: u64 = 1;
 
-    println!("TMP: About to open row_iterators [press NewLine]");
-    let mut null = Default::default();
-    std::io::stdin().read_line(&mut null);
+    // println!("TMP: About to open row_iterators [press NewLine]");
+    // let mut null = Default::default();
+    // std::io::stdin().read_line(&mut null);
 
     let mut row_iters: Vec<RowIterExt> = paths
     .iter()
@@ -49,12 +49,12 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
     }
 
 
-    println!("TMP: About to open row_writeBuffer [press NewLine]");
-    let mut null = Default::default();
-    std::io::stdin().read_line(&mut null);
+    // println!("TMP: About to open row_writeBuffer [press NewLine]");
+    // let mut null = Default::default();
+    // std::io::stdin().read_line(&mut null);
 
-    barriers.add_barrier();
-    let mut b2: u64 = 2;
+    // barriers.add_barrier();
+    // let mut b2: u64 = 2;
 
     let schema = Arc::new(row_iters[0].metadata().file_metadata().schema().clone());
     let mut row_writer = RowWriteBuffer::new(merged_path, schema, 10000).unwrap();
@@ -66,13 +66,13 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
         row_writer.append_row(row);
     };
 
-    println!("TMP: About to start the Loop [press NewLine]");
-    let mut null = Default::default();
-    std::io::stdin().read_line(&mut null);
+    // println!("TMP: About to start the Loop [press NewLine]");
+    // let mut null = Default::default();
+    // std::io::stdin().read_line(&mut null);
 
-    barriers.add_barrier();
-    let mut b3: u64 = 3;
-    let mut b4: u64 = 0;
+    // barriers.add_barrier();
+    // let mut b3: u64 = 3;
+    // let mut b4: u64 = 0;
 
     let mut report = true;
 
@@ -108,21 +108,21 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
             }
         }
 
-        if report {
-            println!("TMP: Handled first iteration and written an item [press NewLine]");
-            let mut null = Default::default();
-            std::io::stdin().read_line(&mut null);
+        // if report {
+        //     println!("TMP: Handled first iteration and written an item [press NewLine]");
+        //     let mut null = Default::default();
+        //     std::io::stdin().read_line(&mut null);
         
-            report = false;
-        }
-        barriers.add_barrier();
-        b4 = 4;
+        //     report = false;
+        // }
+        // barriers.add_barrier();
+        // b4 = 4;
 
     }
 
     println!("Closing the RowWriteBuffer  row_writer.close()");
     row_writer.close();
-    println!("Closed\nUseless memory for checks contains {} (expect 10)", b1 + b2 + b3 + b4);
+    // println!("Closed\nUseless memory for checks contains {} (expect 10)", b1 + b2 + b3 + b4);
 }
 
 

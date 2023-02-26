@@ -1,17 +1,24 @@
 use std::{
     error::Error,
     fs,
-    io::{Write, BufWriter},
+    io::{
+        Write, 
+        BufWriter},
     mem,
-    sync::{Arc, mpsc::{self, SyncSender}},
-    thread,
+    sync::{
+        Arc, 
+        mpsc::{self, SyncSender}}
 };
 use parquet::{
-    errors::{ParquetError, Result},
-    record::{Field, Row},
+    errors::{
+        ParquetError, 
+        Result},
+    record::{
+        Field, 
+        Row},
     schema::types::Type
 };
-use futures::executor::block_on;
+use async_bridge;
 
 mod rowwriter;
 
@@ -30,18 +37,13 @@ impl RowWriteBuffer {
 
         let path_clone = path.to_owned();
 
-        use s3_file::async_bridge;
-
-        println!("TMP ###: Start a channel-writer on a separate thread");
-        //   let writer_handle = tokio::spawn(
-                //            #[tracing::instrument]
         let writer_handle = async_bridge::spawn_async(
             async move { //} || {
 
             // here a channel-writer is started and will run until the rec_buffer is closed by the sender (all senders)
             match rowwriter::RowWriter::channel_writer(rec_buffer, &path_clone, schema) {
-                Ok(()) => println!("#### File {path_clone:?} written"),
-                Err(err) => println!("#### Writing file failed with errors {:?}", err)
+                Ok(()) => (),
+                Err(err) => println!("Writing file '{path_clone:?}'failed with errors {:?}", err)
             }
         });
 
@@ -63,15 +65,11 @@ impl RowWriteBuffer {
     pub fn flush(&mut self) -> Result<()> {
         let rows_to_write = mem::take(&mut self.buffer);
 
-        println!("TMP #### about to flush {} rows.", rows_to_write.len());
-
         match self.write_sink.as_ref().expect("Write_sink should still exist (but None)").send(rows_to_write) {
             Ok(()) => Ok(()),
             Err(err) => {
                 println!("ERROR during flush (sending to write_sink):");
-//                println!("   Description: {}", err.description());
                 println!("   Source: {:?}", err.source());
-//                println!("   Cause: {:?}", err.cause());
 
                 Err(ParquetError::General(format!("Error during flush: {err:#?}")))
             }
@@ -95,7 +93,6 @@ impl RowWriteBuffer {
     // Possibly does this work well when combined with a drop trait?
     pub fn close(&mut self)  {
         if self.buffer.len() > 0 {
-            println!("TMP: Buffer has length {}", self.buffer.len());
             if let Err(err) = self.flush() {
                 panic!("auto-Flush on close failed with {err}");
             }
@@ -107,7 +104,7 @@ impl RowWriteBuffer {
 
         // wait for writer to be ready
 //        self.writer_handle.join().unwrap();
-        block_on(async {
+        async_bridge::run_async(async {
             let wh = self.writer_handle.take().unwrap();
             match wh.await {
                 Err(err) => eprintln!("Error while closing merged file: {err:?}"),
@@ -128,8 +125,6 @@ impl Drop for RowWriteBuffer {
             Some(wh) => println!("Writer_handle exists"),
             None => println!("No writer_handle (None)")
         };
-
-        println!("TMP ####  CLOSING a RowWriteBuffer !!!");
     }
 }
 

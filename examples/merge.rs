@@ -104,7 +104,7 @@ fn main() {
 //         rt.block_on(async {
 //             the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
 //         });
-    current_merge(paths::PATH_1, paths::PATH_2, paths::MERGED_S3)
+    current_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
     //the_merge(paths::PATH_1_S3, paths::PATH_2_S3, paths::MERGED_S3)
 
     } else { // operate on local file-system

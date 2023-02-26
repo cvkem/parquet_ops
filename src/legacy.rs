@@ -164,7 +164,8 @@ fn write_parquet_row_group<W: io::Write>(writer: &mut SerializedFileWriter<W>,
                     .collect();
                 col_writer
                         .typed::<ByteArrayType>()
-                        .write_batch_with_statistics(&values, None, None, Some(&(values[0])), Some(&(values[values.len()-1])), None) //Some(distinct))
+//                        .write_batch_with_statistics(&values, None, None, Some(&(values[0])), Some(&(values[values.len()-1])), None) //Some(distinct))
+                        .write_batch_with_statistics(&values, None, None, None, None, None) //Some(distinct))
                         .expect("writing String column");
                 },
 //                _ => panic!("incorrect column number")
