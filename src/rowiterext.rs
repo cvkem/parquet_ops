@@ -71,6 +71,28 @@ impl<'a> RowIterExt<'a> {
         (head.unwrap(), self.head.is_none())
     }
 
+    // get a vector of at most 'max_rows' rows or None
+    pub fn take(&mut self, max_rows: u64) -> Option<Vec<Row>> {
+        assert!(max_rows > 0); 
+        if self.head == None {
+            return None
+        }
+        let mut data = Vec::new();
+        data.push(self.head.take().unwrap());
+        let mut num_rows = 0;
+        while num_rows < max_rows {
+            if let Some(row) = self.row_iter.next() {
+                data.push(row);
+                num_rows += 1;
+            } else {
+                return Some(data); // we are ready. All data is consumed.
+            }
+        }
+        // set the new head again, as not all data is consumed.
+        self.head = self.row_iter.next();
+        return Some(data);
+    }
+
     pub fn drain<F>(&mut self, row_proc: &mut F) where
         F: FnMut(Row) {
         loop {

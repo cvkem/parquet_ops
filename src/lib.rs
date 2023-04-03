@@ -3,6 +3,7 @@ pub use self::{
     rowiterext::{read_parquet_rowiter},
     merge::{merge_parquet, merge_parquet_fake},
     legacy::{write_parquet, read_parquet_metadata},
+    sort::sort_direct,
     ttypes::MESSAGE_TYPE,
     rowwritebuffer::RowWriteBuffer
 };
@@ -14,6 +15,7 @@ mod merge;
 // test stuff
 mod ttypes;
 //mod test_writer;
+mod sort;
 
 // TODO: to be dropped. Still in place for nested types??
 mod legacy;

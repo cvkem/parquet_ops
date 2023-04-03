@@ -243,6 +243,8 @@ pub fn read_parquet_metadata(path: &Path) {
 
         println!("For path={:?} found file-metadata:\n {:?}", &path, &file_metadata);
 
+        println!("\n### Now showing the Schema");
+
         {
             let schema = file_metadata.schema();
             println!(" Schema = {:#?}  of type {}", &schema, type_of(&schema));
@@ -251,7 +253,10 @@ pub fn read_parquet_metadata(path: &Path) {
 
         }
 //        let rows = file_metadata.num_rows();
-        
+
+
+        println!("\n### Now showing the RowGroups");
+
         for (idx, rg) in parquet_metadata.row_groups().iter().enumerate() {
             println!("  rowgroup: {} has meta {:#?}", idx, rg);
             if SHOW_FIRST_GROUP_ONLY {

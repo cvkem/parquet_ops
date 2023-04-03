@@ -40,7 +40,8 @@ impl RowWriteBuffer {
         let writer_handle = async_bridge::spawn_async(
             async move { //} || {
 
-            // here a channel-writer is started and will run until the rec_buffer is closed by the sender (all senders)
+            // here a channel-writer is started and will run until the rec_buffer is closed by all senders (typically one sender)
+            // each vector of rows received over the channel via the rec_buffer is writen as a separate row_group.
             match rowwriter::RowWriter::channel_writer(rec_buffer, &path_clone, schema) {
                 Ok(()) => (),
                 Err(err) => println!("Writing file '{path_clone:?}'failed with errors {:?}", err)
@@ -81,9 +82,21 @@ impl RowWriteBuffer {
 
         if self.buffer.len() == self.max_row_group {
             self.flush().expect("Failed to flush buffer");
-            self.buffer.clear();
+            self.buffer.clear();  // flush already replaces with an empty buffer, so this is not needed.
         }
     }
+
+    // write a complete row_group to the write-sink. Assumes the current buffer is empty (no pushed rows)
+    pub fn append_row_group(&mut self, rowgroup_data: Vec<Row>) {
+        let old_buffer = mem::replace(&mut self.buffer, rowgroup_data);
+
+        if old_buffer.len() > 0 {
+            panic!("The buffer already contains {} rows. Should be empty when adding a row-group", old_buffer.len());
+        };
+
+        self.flush().expect("Failed to flush buffer");
+        //self.buffer.clear();  // flush already replaces with an empty buffer, so this is not needed.
+     }
 
     // pub fn write_duration(&self) -> Duration {
     //     self.duration.clone()
