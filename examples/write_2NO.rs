@@ -23,11 +23,12 @@ fn get_u64_from_string(s: &str, err_msg: &str) -> Option<u64> {
         .expect(err_msg))
 }
 
-const NUM_EXTRA_COLUMNS: usize = 135;
+
+const DEFAULT_NUM_EXTRA_COLUMNS: u64 = 135;
 
 
 fn main() {
-    let action = env::args().next().unwrap_or("UNKNOWN".to_owned());
+    //let action = env::args().next().unwrap_or("UNKNOWN".to_owned());
 
     let args: Vec<String> = env::args().collect();
 
@@ -38,16 +39,19 @@ fn main() {
     let timer = Instant::now();
 
     let num_recs = if args.len() > 1 { get_u64_from_string(&args[1], "first argument should be 'num_recs' (a positive integer).") } else { None };
-    let group_size = if args.len() > 2 { get_u64_from_string(&args[2], "second argument should be 'group_size' (a positive integer).") } else { None };
+    let group_size = if args.len() > 2 { get_u64_from_string(&args[2], "Second argument should be 'group_size' (a positive integer).") } else { None };
+    let num_extra_columns = if args.len() > 3 { get_u64_from_string(&args[3], "Third argument should be 'num_extra_columns' (a positive integer).").unwrap() } else { DEFAULT_NUM_EXTRA_COLUMNS } as usize;
+
+    assert!(num_extra_columns < 1000, "Number of extra colums > 1000, which is excessive.");
 
     let num_recs_cpy = num_recs.clone();
     let group_size_cpy = group_size.clone();
 
     println!("Creating file with even-rows in {:?}", &path_1);
-    let even_handle = thread::spawn(move || parquet_ops::write_parquet(&path_1, NUM_EXTRA_COLUMNS, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap());
+    let even_handle = thread::spawn(move || parquet_ops::write_parquet(&path_1, num_extra_columns, num_recs, group_size, Some(|i| i % 2 == 0)).unwrap());
  
     println!("Creating file with odd-rows in {:?}", &path_2);        
-    let odd_handle = thread::spawn(move || parquet_ops::write_parquet(&path_2, NUM_EXTRA_COLUMNS, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
+    let odd_handle = thread::spawn(move || parquet_ops::write_parquet(&path_2, num_extra_columns, num_recs_cpy, group_size_cpy, Some(|i| i % 2 != 0)).unwrap());        
 
     even_handle.join();
     odd_handle.join();

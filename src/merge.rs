@@ -8,7 +8,8 @@ use parquet::{
 use super::rowiterext::RowIterExt;
 use super::rowwritebuffer::RowWriteBuffer;
 
-const REPORT_APPEND_STEP: i64 = 100; //10_000  // 1 in REPORT_APPEND_STEP rows is reported on the console.
+use super::REPORT_APPEND_STEP;
+
 
 pub fn merge_parquet_fake(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Row) -> bool) {
     use crate::ttypes::{get_test_schema, test_parquet_row};

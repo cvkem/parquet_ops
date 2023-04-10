@@ -20,13 +20,6 @@ fn type_of<T>(_: &T) -> &'static str {
 mod paths;
 
 
-fn smaller_test(row_1: &Row, row_2: &Row) -> bool {
-    let k1 = row_1.get_long(0).unwrap();
-    let k2 = row_2.get_long(0).unwrap();
-    k1 <= k2
-}
-
-
 fn main() {
     let action = env::args().next().unwrap_or("UNKNOWN".to_owned());
 
@@ -34,7 +27,7 @@ fn main() {
 
     let timer = Instant::now();
 
-    parquet_ops::read_parquet_metadata(&path_1);
+    parquet_ops::show_parquet_metadata(&path_1);
         
     let elapsed = timer.elapsed();
 
