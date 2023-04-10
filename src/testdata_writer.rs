@@ -26,14 +26,17 @@ pub fn write_parquet(path: &str, extra_columns: usize, num_recs: Option<u64>, gr
 
     let mut pw = parquet_writer::get_parquet_writer(path, schema.clone());
 
-    let mut row_writer = RowWriteBuffer::new(path, schema, 10000).unwrap();
+    // Next code should be the alternative if we have prepared rows.
+    // would need some more refactoring to work with RowWriteBuffer
+    //
+    // let mut row_writer = RowWriteBuffer::new(path, schema, 10000).unwrap();
 
-    let mut row_processor = |row: Row| {
-        if row.get_long(0).unwrap() % REPORT_APPEND_STEP == 0 {
-            println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap());
-        }
-        row_writer.append_row(row);
-    };
+    // let mut row_processor = |row: Row| {
+    //     if row.get_long(0).unwrap() % REPORT_APPEND_STEP == 0 {
+    //         println!("Row with id={}, acc={} and amount={}.", row.get_long(0).unwrap(), row.get_string(1).unwrap(), row.get_int(2).unwrap());
+    //     }
+    //     row_writer.append_row(row);
+    // };
     
     let mut start = 0;
     let end = num_recs.unwrap_or(1000);
