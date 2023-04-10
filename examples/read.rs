@@ -1,7 +1,6 @@
 use std::{
     env,
     fs, 
-    path::Path, 
     io::Read};
 use std::time::Instant;
 use std::any::type_name;

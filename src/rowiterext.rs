@@ -1,12 +1,5 @@
-use std::{
-    mem
-};
+use std::mem;
 use parquet::{
-        file::{
-            reader::{
-                SerializedFileReader,
-                FileReader}, 
-            metadata::ParquetMetaData},
         schema::{
             parser::parse_message_type,
             types::Type},
@@ -15,6 +8,7 @@ use parquet::{
             reader::RowIter
         }
 };
+use crate::parquet_reader::{ParquetReaderEnum, get_parquet_reader};
 
 
 
@@ -89,102 +83,50 @@ impl<'a> RowIterExt<'a> {
     }
 }
 
-use s3_file::{S3Reader};
 
+
+/// get a projection from a message_type if String exists and parses to a valid parquet Schema (Type)
+fn get_projection<'a>(message_type: Option<&'a str>) -> Option<Type> {
+    message_type.map(|mt| parse_message_type(mt).unwrap())
+}
 
 /// create an iterator over the data of a Parquet-file.
 /// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system. 
 fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, Type)> {
     //    let proj = parse_message_type(message_type).ok();
-    let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
-    let schema = proj.as_ref().unwrap().clone();
-    println!(" The type = {:?}", proj);
+    let proj = get_projection(message_type);
 
-    // we differentiate at this level for the different types of inputs as lower levels can not handle this more generic
-    // as the Associated types are in the way on ChunkReader, and also on SerializedFileReader as it wants to see the generic.
-    // handling it at this level introduces some source-code-duplication, but that is manageable.
-    let (ri_res, parquet_metadata) = match path.split(':').next().unwrap() {
-        prefix if path.len() == prefix.len() => {
-                let reader = SerializedFileReader::try_from(path.to_owned()).unwrap();
-                //let parquet_metadata = reader.metadata().clone();
-                let ri_res = RowIter::from_file_into(Box::new(reader))
-                    .project(proj);
-                (ri_res, schema)        
+    let reader = get_parquet_reader(path);
+
+    let schema = if let Some(projection) = proj.as_ref() {
+        projection.clone()
+    } else {
+        // no projection set, so return the full metadata
+        reader.metadata().file_metadata().schema().clone()
+    };
+    
+
+    let row_iter = match reader {
+            ParquetReaderEnum::File(reader) => {
+                RowIter::from_file_into(Box::new(reader))
             }
-        "mem" =>panic!("prefix 'mem:'can best be handled via temp-files, or all data should be incoded in the path-string"),
-        "s3" => {
-            let parts: Vec<&str> = path.split(":").collect();
-            assert_eq!(parts.len(), 3, "Path should have format \"s3:<bucket>:<object_name>\".");
-            let bucket_name = parts[1].to_string();
-            let object_name = parts[2].to_owned();
-            let chunk_reader = S3Reader::new(bucket_name, object_name, 10_000*1024);
+            ParquetReaderEnum::S3(reader) => RowIter::from_file_into(Box::new(reader))
+        }.project(proj);  // make the mapping to the right schema
 
-            let reader = SerializedFileReader::new(chunk_reader).unwrap();
-            //let parquet_metadata = reader.metadata().clone();
-            let ri_res = RowIter::from_file_into(Box::new(reader))
-                .project(proj);
-            (ri_res, schema)        
-        }
-        prefix => panic!("get_parquet_iter not implemented for prefix {prefix} of path {path}")
-        };
-
-    if ri_res.is_err() {
-        println!("Opening {path} failed with error: {:?}", ri_res.err());
+    if row_iter.is_err() {
+        println!("Opening {path} failed with error: {:?}", row_iter.err());
         return None;
     } 
 
-    let row_iter = ri_res.unwrap();
-
-    Some((row_iter, parquet_metadata))
+    Some((row_iter.unwrap(), schema))
 }
     
 
-// failed experiment
-// /// get a parquet-reader directly from a chunk-reader, such that I can pass in the dependency.
-// /// This ensure the current libary parquet_ops does not need to depend on s3_file to allow for AWS access, as the chunck_reader is passed in.
-// fn get_parquet_iter_from_chunkreader<'a, CR>(chunk_reader: &'a dyn ChunkReader<T = CR>, message_type: Option<&'a str>) -> Option<(RowIter<'a>, ParquetMetaData)> {
-//     //    let proj = parse_message_type(message_type).ok();
-//     let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
-
-//     let reader = SerializedFileReader::new(chunk_reader).unwrap();
-//     let parquet_metadata = reader.metadata().clone();
-//     let ri_res = RowIter::from_file_into(Box::new(reader))
-//         .project(proj);
-//     let row_iter = ri_res.unwrap();
-
-//     Some((row_iter, parquet_metadata))
-// }
-
-
-
-// failed experiment: Associated Type is manditory, so I can not generalize
-//
-// use parquet::file::reader::ChunkReader;
-// use bytes::Bytes;
-// use std::io::BufReader;
-// use std::fs;
-
-// fn create_SerializedFileReader(path: &str) -> Box<SerializedFileReader> {
-//      match path.split(':').next().unwrap() {
-//         path => {
-//                 let file = fs::OpenOptions::new()
-//                     .read(true)
-//                     .open(path)
-//                     .unwrap();
-//                 let chunk_reader = ChunkReader::new(file);
-//                 let SF_reader = SerializedFileReader::new(chunk_reader);
-//                 Box::new(SF_reader)
-//             },
-// //        "mem" => Box::new(Bytes::new()), // how to get this filled up?
-// //        "s3" => println!("{s}: S3"),
-//         prefix => panic!("Unknown prefix '{prefix}' on file {path}")
-//     }
-// }
     
 
-
+/// run over a parquet row_iter and read all rows up to a maximum.
 pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec<Row>{
-    let max_rows = max_rows.or(Some(1000000000)).unwrap();
+    let max_rows = max_rows.or(Some(1_000_000_000)).unwrap();
 
     let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
 

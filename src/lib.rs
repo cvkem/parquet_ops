@@ -4,14 +4,15 @@ pub use self::{
     merge::{merge_parquet, merge_parquet_fake},
     //legacy_writer::write_parquet,
     testdata_writer::write_parquet,
-    metadata::show_parquet_metadata,
+    metadata::{get_parquet_metadata, show_parquet_metadata},
     sort::sort_direct,
     ttypes::MESSAGE_TYPE,
     rowwritebuffer::RowWriteBuffer
 };
 
-mod rowiterext;
+mod parquet_reader;
 mod parquet_writer;
+mod rowiterext;
 mod rowwritebuffer;
 mod merge;
 mod metadata;

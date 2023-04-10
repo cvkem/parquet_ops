@@ -5,9 +5,9 @@ use std::{
     io::Read};
 use std::time::Instant;
 use std::any::type_name;
-use parquet::record::{Row,
-    RowAccessor};
-use parquet_ops;
+// use parquet::record::{Row,
+//     RowAccessor};
+use parquet_ops::{self, get_parquet_metadata};
 
 // return the type of a ref as a static string
 fn type_of<T>(_: &T) -> &'static str {
@@ -23,11 +23,11 @@ mod paths;
 fn main() {
     let action = env::args().next().unwrap_or("UNKNOWN".to_owned());
 
-    let path_1 = Path::new(paths::PATH_1);
+    let path_1 = paths::PATH_1;
 
     let timer = Instant::now();
 
-    parquet_ops::show_parquet_metadata(&path_1);
+    parquet_ops::show_parquet_metadata(&get_parquet_metadata(path_1));
         
     let elapsed = timer.elapsed();
 
