@@ -7,7 +7,9 @@ use parquet::{
                 SerializedFileReader,
                 FileReader}, 
             metadata::ParquetMetaData},
-        schema::parser::parse_message_type,
+        schema::{
+            parser::parse_message_type,
+            types::Type},
         record::{Row,
             RowAccessor,
             reader::RowIter
@@ -18,18 +20,18 @@ use parquet::{
 
 pub struct RowIterExt<'a> {
     row_iter: RowIter<'a>,
-    metadata: ParquetMetaData,
+    schema: Type,
     head: Option<Row>
 }
 
 impl<'a> RowIterExt<'a> {
     pub fn new(path: &'a str) -> Self {
-        if let Some((mut row_iter, metadata)) = get_parquet_iter(path, None) {
+        if let Some((mut row_iter, schema)) = get_parquet_iter(path, None) {
 
             let head = row_iter.next();
             RowIterExt {
                 row_iter,
-                metadata,
+                schema,
                 head
             }
         } else {
@@ -37,29 +39,10 @@ impl<'a> RowIterExt<'a> {
         }
     }
 
-
-    // pub fn from_chunkreader<CR>(chunk_reader: Box<dyn ChunkReader<T = CR>>) -> Self {
-    //     if let Some((mut row_iter, metadata)) = get_parquet_iter_from_chunkreader(chunk_reader, None) {
-
-    //         let head = row_iter.next();
-    //         RowIterExt {
-    //             row_iter,
-    //             metadata,
-    //             head
-    //         }
-    //     } else {
-    //         panic!("Failed to create iterator for chunkReader");
-    //     }
-    // }
-   
-
-    // pub fn next(&mut self) -> Option<Row> {
-    //     self.row_iter.next()
-    // }
-
-    pub fn metadata(&self) -> &ParquetMetaData {
-        &self.metadata
+    pub fn schema(&self) -> &Type {
+        &self.schema
     }
+
 
     pub fn head(&self) -> &Option<Row> {
         &self.head
@@ -111,9 +94,10 @@ use s3_file::{S3Reader};
 
 /// create an iterator over the data of a Parquet-file.
 /// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system. 
-fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, ParquetMetaData)> {
+fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, Type)> {
     //    let proj = parse_message_type(message_type).ok();
     let proj = message_type.map(|mt| parse_message_type(mt).unwrap());
+    let schema = proj.as_ref().unwrap().clone();
     println!(" The type = {:?}", proj);
 
     // we differentiate at this level for the different types of inputs as lower levels can not handle this more generic
@@ -122,10 +106,10 @@ fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<
     let (ri_res, parquet_metadata) = match path.split(':').next().unwrap() {
         prefix if path.len() == prefix.len() => {
                 let reader = SerializedFileReader::try_from(path.to_owned()).unwrap();
-                let parquet_metadata = reader.metadata().clone();
+                //let parquet_metadata = reader.metadata().clone();
                 let ri_res = RowIter::from_file_into(Box::new(reader))
                     .project(proj);
-                (ri_res, parquet_metadata)        
+                (ri_res, schema)        
             }
         "mem" =>panic!("prefix 'mem:'can best be handled via temp-files, or all data should be incoded in the path-string"),
         "s3" => {
@@ -136,10 +120,10 @@ fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<
             let chunk_reader = S3Reader::new(bucket_name, object_name, 10_000*1024);
 
             let reader = SerializedFileReader::new(chunk_reader).unwrap();
-            let parquet_metadata = reader.metadata().clone();
+            //let parquet_metadata = reader.metadata().clone();
             let ri_res = RowIter::from_file_into(Box::new(reader))
                 .project(proj);
-            (ri_res, parquet_metadata)        
+            (ri_res, schema)        
         }
         prefix => panic!("get_parquet_iter not implemented for prefix {prefix} of path {path}")
         };

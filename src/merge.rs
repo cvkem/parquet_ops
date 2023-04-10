@@ -57,7 +57,7 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str,  smaller: fn(&Row, &Ro
     // barriers.add_barrier();
     // let mut b2: u64 = 2;
 
-    let schema = Arc::new(row_iters[0].metadata().file_metadata().schema().clone());
+    let schema = Arc::new(row_iters[0].schema().clone());
     let mut row_writer = RowWriteBuffer::new(merged_path, schema, 10000).unwrap();
 
     let mut row_processor = |row: Row| {

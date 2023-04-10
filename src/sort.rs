@@ -18,7 +18,7 @@ pub fn sort_direct(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &R
     let mut input =RowIterExt::new(input_path);
     assert!(input.head().is_some());
 
-    let schema = Arc::new(input.metadata().file_metadata().schema().clone());
+    let schema = Arc::new(input.schema().clone());
     let mut row_writer = RowWriteBuffer::new(sorted_path, schema, 10000).unwrap();
 
     if let Some(mut data) = input.take(MAX_SORT_BLOCK) {
@@ -41,7 +41,7 @@ pub fn sort(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &Row) -> 
     let mut input =RowIterExt::new(input_path);
     assert!(input.head().is_some());
 
-    let schema = Arc::new(input.metadata().file_metadata().schema().clone());
+    let schema = Arc::new(input.schema().clone());
     let mut row_writer = RowWriteBuffer::new(sorted_path, schema, 10000).unwrap();
 
     while let Some(mut data) = input.take(MAX_SORT_BLOCK) {
