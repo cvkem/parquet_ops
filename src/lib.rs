@@ -1,12 +1,13 @@
 
 pub use self::{
-    rowiterext::{read_parquet_rowiter},
+    rowiterext::{read_rows, read_rows_stepped},
+    rowiterext::ttest::read_parquet_rowiter,
     merge::{merge_parquet, merge_parquet_fake},
     //legacy_writer::write_parquet,
     testdata_writer::write_parquet,
     metadata::{get_parquet_metadata, show_parquet_metadata},
-    sort::sort_direct,
-    ttypes::MESSAGE_TYPE,
+    sort::sort,
+    ttypes::{MESSAGE_TYPE, ACCOUNT_ONLY_TYPE},
     rowwritebuffer::RowWriteBuffer
 };
 

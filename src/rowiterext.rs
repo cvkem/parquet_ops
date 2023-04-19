@@ -4,7 +4,6 @@ use parquet::{
             parser::parse_message_type,
             types::Type},
         record::{Row,
-            RowAccessor,
             reader::RowIter
         }
 };
@@ -120,37 +119,64 @@ fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<
 
     Some((row_iter.unwrap(), schema))
 }
-    
 
-    
 
-/// run over a parquet row_iter and read all rows up to a maximum.
-pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec<Row>{
+
+
+/// run over a parquet row_iter and read all rows up to a maximum and return these as a vector
+pub fn read_rows(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec<Row>{
     let max_rows = max_rows.or(Some(1_000_000_000)).unwrap();
 
     let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
 
-    let mut data = Vec::new();
+    res.collect()
+}
 
-   let mut sum = 0;
-   let mut last_idx = 0;
-    for (i, row) in res.enumerate() {
-        println!("\nresult {i}:  {row:?}   already accumulated {sum}");
-        if let Ok(amount) = row.get_int(1) {
-            println!("{i} has amount={amount}");
-            sum += amount;
-        }
-        data.push(row);
+use itertools::Itertools;
 
-        if i > max_rows { break; }
-        last_idx = i;
-    }
+/// run over a parquet row_iter and read all rows up to a maximum and return these as a vector with step-size applied.
+pub fn read_rows_stepped(path: &str, step_size: usize, max_rows: Option<usize>, message_type: &str) -> Vec<Row>{
+    let max_rows = max_rows.or(Some(1_000_000_000)).unwrap();
 
-    println!("iterated over {last_idx}  rows with total amount = {sum}");
+    let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
 
-    data
+    res.step(step_size).collect()
 }
 
 
+pub mod ttest {
 
+    use super::get_parquet_iter;
+    use parquet::record::{
+        Row,
+        RowAccessor};
+
+    /// run over a parquet row_iter and read all rows up to a maximum.
+    pub fn read_parquet_rowiter(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec<Row>{
+        let max_rows = max_rows.or(Some(1_000_000_000)).unwrap();
+
+        let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
+
+        let mut data = Vec::new();
+
+    let mut sum = 0;
+    let mut last_idx = 0;
+        for (i, row) in res.enumerate() {
+            println!("\nresult {i}:  {row:?}   already accumulated {sum}");
+            if let Ok(amount) = row.get_int(1) {
+                println!("{i} has amount={amount}");
+                sum += amount;
+            }
+            data.push(row);
+
+            if i > max_rows { break; }
+            last_idx = i;
+        }
+
+        println!("iterated over {last_idx}  rows with total amount = {sum}");
+
+        data
+    }
+
+}
 

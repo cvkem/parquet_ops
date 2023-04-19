@@ -39,6 +39,31 @@ fn main() {
 
     println!("Action '{}' with duration {:?}", &action, &elapsed);
 
+    println!("\n Now reading all data again (all columns).");
+
+    let timer = Instant::now();
+
+    let output = parquet_ops::read_rows(path_1, None, parquet_ops::MESSAGE_TYPE);
+    
+    let elapsed = timer.elapsed();
+
+    println!("Action '{}' with duration {:?} and returned a vector of {}", &action, &elapsed, output.len());
+
+    println!("\n Now reading all data again (only a single string column).");
+
+    let timer = Instant::now();
+
+    let output = parquet_ops::read_rows_stepped(path_1, 50, None, parquet_ops::ACCOUNT_ONLY_TYPE);
+    
+    let elapsed = timer.elapsed();
+
+    println!("Action '{}' with duration {:?} and returned a vector of {}", &action, &elapsed, output.len());
+
+    let str_output = output
+        .iter()
+        .map(|x| x.get_string(0).unwrap())
+        .fold(String::new(), |l, r| if l.len()==0 { r.to_owned()} else { l + ", " + r });
+    println!("The output:\n{}", str_output);
 
     // restructure to check output file of merge (not created yet)
     let mut bytes = [0_u8; 10];

@@ -19,6 +19,11 @@ message schema {
     REQUIRED BINARY extra_00 (UTF8);} 
 ";
 
+pub const ACCOUNT_ONLY_TYPE: &str = "
+message schema {
+    REQUIRED BINARY account (UTF8);
+";
+
 // const NESTED_MESSAGE_TYPE: &str = "
 // message schema {
 //   REQUIRED BINARY account (UTF8);

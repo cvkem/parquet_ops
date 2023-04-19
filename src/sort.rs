@@ -13,7 +13,7 @@ use super::rowwritebuffer::RowWriteBuffer;
 const MAX_SORT_BLOCK: u64 = 1_000_000; //10_000  // 1 in REPORT_APPEND_STEP rows is reported on the console.
 
 /// sort the input in one pass and writer it to the sorted-path 
-pub fn sort_direct(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &Row) -> Ordering) {
+pub fn sort(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &Row) -> Ordering) {
 
     let mut input =RowIterExt::new(input_path);
     assert!(input.head().is_some());
@@ -23,7 +23,7 @@ pub fn sort_direct(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &R
 
     if let Some(mut data) = input.take(MAX_SORT_BLOCK) {
         if let Some(_) = input.take(1) {
-            panic!("the input-file contained more than {MAX_SORT_BLOCK} rows. Use the sort operation instead (2-stage sort)");
+            panic!("the input-file contained more than {MAX_SORT_BLOCK} rows. Use the sort operation instead (multi-stage sort), which can handle huge files");
         };
         data.sort_by(comparator);
 
@@ -36,7 +36,7 @@ pub fn sort_direct(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &R
 
 
 /// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged. 
-pub fn sort(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &Row) -> Ordering) {
+pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &Row) -> Ordering) {
 
     let mut input =RowIterExt::new(input_path);
     assert!(input.head().is_some());

@@ -32,7 +32,7 @@ fn main() {
 
     let timer = Instant::now();
 
-    parquet_ops::sort_direct(path_1, sorted_path, |r1, r2| comparator(r1, r2));
+    parquet_ops::sort(path_1, sorted_path, |r1, r2| comparator(r1, r2));
     
     let elapsed = timer.elapsed();
 

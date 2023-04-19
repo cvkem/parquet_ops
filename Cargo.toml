@@ -11,3 +11,4 @@ tokio = { version = "1.0", default-features = false, features = ["process"] }
 chrono = "0.4.23"
 async_bridge = { git = "https://github.com/cvkem/async_bridge.git"}
 s3_file = { git = "https://github.com/cvkem/s3_file", branch = "Arc-mutex-async-exp" }
+itertools = "0.10.5"
