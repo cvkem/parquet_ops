@@ -1,6 +1,6 @@
 
 pub use self::{
-    rowiterext::{read_rows, read_rows_stepped},
+    rowiterext::{read_rows, read_rows_stepped, read_row_sample, get_parquet_iter},
     rowiterext::ttest::read_parquet_rowiter,
     merge::{merge_parquet, merge_parquet_fake},
     //legacy_writer::write_parquet,

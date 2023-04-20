@@ -24,6 +24,10 @@ impl ParquetReaderEnum {
             Self::S3(reader) => reader.metadata()
         }.clone()
     } 
+
+    pub fn num_rows(&self) -> i64 {
+        self.metadata().file_metadata().num_rows()
+    }
 }
 
 /// create an iterator over the data of a Parquet-file.

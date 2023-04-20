@@ -53,7 +53,7 @@ fn main() {
 
     let timer = Instant::now();
 
-    let output = parquet_ops::read_rows_stepped(path_1, 50, None, parquet_ops::ACCOUNT_ONLY_TYPE);
+    let output = parquet_ops::read_rows_stepped(path_1, 50, parquet_ops::ACCOUNT_ONLY_TYPE);
     
     let elapsed = timer.elapsed();
 

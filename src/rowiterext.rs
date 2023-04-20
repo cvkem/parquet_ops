@@ -7,6 +7,7 @@ use parquet::{
             reader::RowIter
         }
 };
+use itertools::Itertools;
 use crate::parquet_reader::{ParquetReaderEnum, get_parquet_reader};
 
 
@@ -91,7 +92,7 @@ fn get_projection<'a>(message_type: Option<&'a str>) -> Option<Type> {
 
 /// create an iterator over the data of a Parquet-file.
 /// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system. 
-fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, Type)> {
+pub fn get_parquet_iter<'a>(path: &'a str, message_type: Option<&'a str>) -> Option<(RowIter<'a>, Type)> {
     //    let proj = parse_message_type(message_type).ok();
     let proj = get_projection(message_type);
 
@@ -132,16 +133,28 @@ pub fn read_rows(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec
     res.collect()
 }
 
-use itertools::Itertools;
 
-/// run over a parquet row_iter and read all rows up to a maximum and return these as a vector with step-size applied.
-pub fn read_rows_stepped(path: &str, step_size: usize, max_rows: Option<usize>, message_type: &str) -> Vec<Row>{
-    let max_rows = max_rows.or(Some(1_000_000_000)).unwrap();
-
+/// run over a parquet row_iter and read rows up to a maximum and return these as a vector with step-size applied.
+/// Stepsize should be bigger than 0.
+pub fn read_rows_stepped(path: &str, step_size: usize, message_type: &str) -> Vec<Row> {
     let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
 
     res.step(step_size).collect()
 }
+
+
+/// run over a parquet row_iter and read all rows up to a maximum and return these as a vector with step-size applied.
+pub fn read_row_sample(path: &str, sample_size: usize, message_type: &str) -> Vec<Row>{
+    let num_rows = get_parquet_reader(path).num_rows();
+    let step_size = num_rows / sample_size as i64;
+
+    if step_size > 0 {
+        read_rows_stepped(path, step_size as usize, message_type)
+    } else {
+        read_rows(path,None, message_type)
+    }
+}
+
 
 
 pub mod ttest {
