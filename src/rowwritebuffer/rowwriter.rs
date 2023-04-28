@@ -182,12 +182,18 @@ fn write_i64_column_aux<R>(rows: Iter<Row>, col_writer: &mut SerializedColumnWri
     let column: Vec<i64> = rows
         .map( row_acccessor )
         .collect();
-    let the_min = column.iter().min().unwrap();
-    let the_max = column.iter().max().unwrap();
+    // let the_min = column.iter().min().unwrap();
+    // let the_max = column.iter().max().unwrap();
+
+    // col_writer
+    //     .typed::<Int64Type>()
+    //     .write_batch_with_statistics(&column, None, None, Some(&the_min), Some(&the_max), None)?;
+    let the_min = column.iter().min();
+    let the_max = column.iter().max();
 
     col_writer
         .typed::<Int64Type>()
-        .write_batch_with_statistics(&column, None, None, Some(&the_min), Some(&the_max), None)?;
+        .write_batch_with_statistics(&column, None, None, the_min, the_max, None)?;
     Ok(())
 }
 

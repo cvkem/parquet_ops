@@ -22,7 +22,8 @@ fn comparator(row_1: &Row, row_2: &Row) -> Ordering {
     let k2 = row_2.get_long(0).unwrap();
 
     // reverse ordering
-    k2.cmp(&k1)
+//    k2.cmp(&k1)
+    k1.cmp(&k2)
 }
 
 fn main() {
@@ -32,7 +33,7 @@ fn main() {
 
     let timer = Instant::now();
 
-    parquet_ops::sort(path_1, sorted_path, |r1, r2| comparator(r1, r2));
+    parquet_ops::sort_multistage(path_1, sorted_path, |r1, r2| comparator(r1, r2));
     
     let elapsed = timer.elapsed();
 
@@ -46,4 +47,4 @@ fn main() {
     };
     assert_eq!(&bytes[0..4], &[b'P', b'A', b'R', b'1']);
     println!("First 10 bytes are: {:?}", std::str::from_utf8(&bytes[0..7]));
-    }
+}

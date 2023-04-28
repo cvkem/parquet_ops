@@ -6,8 +6,8 @@ pub use self::{
     //legacy_writer::write_parquet,
     testdata_writer::write_parquet,
     metadata::{get_parquet_metadata, show_parquet_metadata},
-    sort::sort,
-    ttypes::{MESSAGE_TYPE, ACCOUNT_ONLY_TYPE},
+    sort::{sort, sort_multistage},
+    ttypes::{MESSAGE_TYPE, ACCOUNT_ONLY_TYPE, ID_ONLY_TYPE},
     rowwritebuffer::RowWriteBuffer
 };
 

@@ -22,6 +22,8 @@ use async_bridge;
 
 mod rowwriter;
 
+const CHANNEL_SIZE: usize = 2;
+
 pub struct RowWriteBuffer {
     max_row_group: usize,
     buffer: Vec<Row>,
@@ -33,7 +35,7 @@ pub struct RowWriteBuffer {
 impl RowWriteBuffer {
     
     pub fn new(path: &str, schema: Arc<Type>, group_size: usize) -> Result<RowWriteBuffer> {
-        let (write_sink, rec_buffer) = mpsc::sync_channel(2);
+        let (write_sink, rec_buffer) = mpsc::sync_channel(CHANNEL_SIZE);
 
         let path_clone = path.to_owned();
 
@@ -88,6 +90,10 @@ impl RowWriteBuffer {
 
     // write a complete row_group to the write-sink. Assumes the current buffer is empty (no pushed rows)
     pub fn append_row_group(&mut self, rowgroup_data: Vec<Row>) {
+        if rowgroup_data.len() == 0 {
+            println!("Received an empty row-group. Ignoring it");
+            return;
+        }
         let old_buffer = mem::replace(&mut self.buffer, rowgroup_data);
 
         if old_buffer.len() > 0 {

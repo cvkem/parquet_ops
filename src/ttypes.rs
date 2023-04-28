@@ -24,6 +24,13 @@ message schema {
     REQUIRED BINARY account (UTF8);
 ";
 
+
+pub const ID_ONLY_TYPE: &str = "
+message schema {
+  REQUIRED INT64 id;
+  ";
+
+
 // const NESTED_MESSAGE_TYPE: &str = "
 // message schema {
 //   REQUIRED BINARY account (UTF8);
