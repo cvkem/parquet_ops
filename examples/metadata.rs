@@ -1,7 +1,6 @@
 use std::{
     env,
     fs, 
-    path::Path, 
     io::Read};
 use std::time::Instant;
 use std::any::type_name;
@@ -21,23 +20,23 @@ mod paths;
 
 
 fn main() {
-    let action = env::args().next().unwrap_or("UNKNOWN".to_owned());
+    let path = env::args().skip(1).next().unwrap_or(paths::PATH_1.to_owned());
 
-    let path_1 = paths::PATH_1;
+    println!("About to inspect metadata of file {path}");
 
     let timer = Instant::now();
 
-    parquet_ops::show_parquet_metadata(&get_parquet_metadata(path_1));
+    parquet_ops::show_parquet_metadata(&get_parquet_metadata(&path));
         
     let elapsed = timer.elapsed();
 
-    println!("Action '{}' with duration {:?}", &action, &elapsed);
+    println!("Action Metadata for file '{}' with duration {:?}", &path, &elapsed);
 
 
     // restructure to check output file of merge (not created yet)
     let mut bytes = [0_u8; 10];
-    if let Err(err) = fs::File::open(&path_1).unwrap().read(&mut bytes) {
-        println!("Failed to open {path_1:?}. Obtained error: {err}");
+    if let Err(err) = fs::File::open(&path).unwrap().read(&mut bytes) {
+        println!("Failed to open {path:?}. Obtained error: {err}");
     };
     assert_eq!(&bytes[0..4], &[b'P', b'A', b'R', b'1']);
     println!("First 10 bytes are: {:?}", std::str::from_utf8(&bytes[0..7]));
