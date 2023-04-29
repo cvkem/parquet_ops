@@ -1,4 +1,5 @@
 /target
 *.parquet
+*.parquet.*
 .history
 .vscode

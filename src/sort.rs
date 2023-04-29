@@ -48,19 +48,34 @@ pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row
                     .map(|r| r.get_long(0).unwrap().to_owned())
                     .collect::<Vec<_>>();
     sample.sort();
-    let num_part = 2;
-    let step_size = sample.len() / num_part;
+    let num_part = 3;
+    let step_size = sample.len() / (num_part - 1);
     let partition = sample
         .into_iter()
-        .step_by(step_size)
+        .batching(|it| it.skip(step_size -1).next())   // deterministic step_by that always skips step_size -1 fields before taking the first value
+//        .step_by(step_size)
         .collect::<Vec<_>>();
 
     let mut input = RowIterExt::new(input_path);
     assert!(input.head().is_some());
 
-    let schema = Arc::new(input.schema().clone());
-    let mut row_writer = RowWriteBuffer::new(sorted_path, schema, 10000).unwrap();
+    let path_stage_1 = sorted_path.to_owned() + ".intermediate";
+    // let mut row_writer = Vec::new();
+    // for i in 0..num_part {
+    //     let path = format!("{}-{}", path_stage_1, i);
+    //     let schema = Arc::new(input.schema().clone());
+    //     let mut row_writer_elem = RowWriteBuffer::new(&path, schema, 10000).unwrap();
+    //     row_writer.push(row_writer_elem);
+    // };
+    let interm_paths: Vec<_> = (0..num_part).map(|i| format!("{}-{}", path_stage_1, i)).collect();
+    let mut row_writer: Vec<_> = interm_paths
+        .iter()
+        .map(|path| {
+            let schema = Arc::new(input.schema().clone());
+            RowWriteBuffer::new(&path, schema, 10000).unwrap() })
+        .collect();
 
+    println!("Enter phase-1: writing to intermedidate file(s) {path_stage_1}");
     while let Some(mut data) = input.take(MAX_SORT_BLOCK) {
             data.sort_by(comparator);
 
@@ -100,17 +115,40 @@ pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row
                     };
                     println!("collected a dataset of size {}", data.len());
                     // move to next partition
+                    let idx = i;
                     i = i+1;
-                    Some(data)})
-                .for_each(|data| {
+                    Some((idx, data))})
+                .for_each(|(idx, data)| {
                     println!("Now appending a row-group of length: {}", data.len());
                     let ids: Vec<_> = data.iter().map(|r| r.get_long(0)).collect();
                     println!(" The collected ids are: {ids:?}");
-                    row_writer.append_row_group(data)})
+                    row_writer[idx].append_row_group(data)})
     };
 
-    println!("Closing the RowWriteBuffer  row_writer.close()");
+    println!("Closing the RowWriteBuffer: {path_stage_1}");
+    // for i in 0..num_part {
+    //     row_writer[i].close();
+    // }
+    (0..num_part).for_each(|i| row_writer[i].close());
+
+    println!("Move intermediate data to the final file '{sorted_path}'");
+    let schema = Arc::new(input.schema().clone());
+    let mut row_writer = RowWriteBuffer::new(&sorted_path, schema, 10000).unwrap();
+
+    interm_paths.iter()
+        .for_each(|interm_path| {
+            let mut input = RowIterExt::new(interm_path);
+            assert!(input.head().is_some());
+            let Some(mut data) = input.take(u64::MAX) else {
+                println!("The file '{interm_path}' contains no data-rows.");
+                return;
+            };
+            data.sort_by(comparator);
+            row_writer.append_row_group(data);
+        });
     row_writer.close();
+
+
 }
 
 
