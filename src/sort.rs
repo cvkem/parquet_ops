@@ -1,12 +1,15 @@
 use std::{
     sync::Arc,
-    cmp::Ordering};
+    cmp::Ordering,
+    marker::PhantomData};
 use itertools::Itertools;
 use parquet::{
         record::{Row,
             RowAccessor
-        }
+        },
+        schema::types::Type as Parquet_type
 };
+
 use crate::rowiterext::read_row_sample;
 
 use crate::{ACCOUNT_ONLY_TYPE, ID_ONLY_TYPE};
@@ -39,15 +42,69 @@ pub fn sort(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &Row) -> 
 }
 
 
+// pub trait sort_multistage_typed {
+//     type Tpe;
+//     fn get_value(&self, row: &Row) -> Self::Tpe;
+//     fn comparator(left: &Row, right: &Row) -> Ordering;
+
+// //    fn comparator(left: &Row, right: &Row) -> Ordering;
+//     fn sort(&self);
+// }
+
+// struct sort_ms_typed<T>{
+//     field_name: String,
+//     field_idx: usize,
+//     schema: Parquet_type,
+//     sorted_path: String,
+//     phantom: PhantomData<T>
+// }
+
+// // impl<T: PartialOrd> sort_multistage_typed for sort_ms_typed<T> {
+// //     type Tpe = T;
+
+// //     fn sort (&self) {
+
+// //     } 
+
+// // }
+
+// impl<i32> sort_multistage_typed for sort_ms_typed<i32> {
+//     type Tpe = i32;
+
+//     fn sort (&self) {
+
+//     }
+
+//     fn get_value(&self, row: &Row) -> i32 {
+//         123_i32
+//     }
+
+//     fn comparator(left: &Row, right: &Row) -> Ordering {
+//         Ordering::Equal
+//     }
+
+// }
+
+
+
 /// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged. 
 pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row, &Row) -> Ordering) {
 
+    // Open reader 'RowIterExt' such that we get access to the schema (and know the file/object is readable)
+    let mut input = RowIterExt::new(input_path);
+    assert!(input.head().is_some());
+    let schema = Arc::new(input.schema().clone());
+
+    println!("#####\nSchema = {:#?}\n###", schema);
+
+    let single_column_message_type = ID_ONLY_TYPE; // to be moved to interface-trait
     // row 'account' should be flexible.
-    let mut sample = read_row_sample(input_path, 1000, ID_ONLY_TYPE)
-                    .iter()
-                    .map(|r| r.get_long(0).unwrap().to_owned())
-                    .collect::<Vec<_>>();
-    sample.sort();
+    let mut sample = read_row_sample(input_path, 1000, single_column_message_type);
+                    // .iter()
+                    // .map(|r| r.get_long(0).unwrap().to_owned())
+                    // .collect::<Vec<_>>();
+    let sort_key = |r: &Row| r.get_long(0).unwrap().to_owned(); // to be moved to interface-trait
+    sample.sort_unstable_by_key(sort_key);
     let num_part = 3;
     let step_size = sample.len() / (num_part - 1);
     let partition = sample
@@ -55,9 +112,6 @@ pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row
         .batching(|it| it.skip(step_size -1).next())   // deterministic step_by that always skips step_size -1 fields before taking the first value
 //        .step_by(step_size)
         .collect::<Vec<_>>();
-
-    let mut input = RowIterExt::new(input_path);
-    assert!(input.head().is_some());
 
     let path_stage_1 = sorted_path.to_owned() + ".intermediate";
     // let mut row_writer = Vec::new();
@@ -71,13 +125,12 @@ pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row
     let mut row_writer: Vec<_> = interm_paths
         .iter()
         .map(|path| {
-            let schema = Arc::new(input.schema().clone());
-            RowWriteBuffer::new(&path, schema, 10000).unwrap() })
+            RowWriteBuffer::new(&path, Arc::clone(&schema), 10000).unwrap() })
         .collect();
 
     println!("Enter phase-1: writing to intermedidate file(s) {path_stage_1}");
     while let Some(mut data) = input.take(MAX_SORT_BLOCK) {
-            data.sort_by(comparator);
+            data.sort_by(comparator); // to be moved to interface-trait (or use sort_by_key)
 
             let mut i: usize = 0;  // skip first field as it is the lowest value and thus seems to be a zero-partition ??
             let mut ready: bool = false;
@@ -90,13 +143,15 @@ pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row
                         { return None; };  // early termination as end of iterator is flagged.
 
                     let data: Vec<_> = if i < partition.len() {
-                        let bar = &partition[i];
-                        println!("{i}:  Create batch for upper bound {bar}");
+                        let check_in_partition = {  // to be moved to interface-trait
+                            let bar = partition[i].get_long(0).unwrap();
+                            println!("{i}:  Create batch for upper bound {bar}");
+                            move |r : &Row| r.get_long(0).unwrap() < bar }; 
                         // using it.take_while(..) does not work, as it loses the first item of the next partition.
                         // so we implement this alternative 
                         let mut data = Vec::new();
                         while let Some(r) = it.peek() {
-                            if r.get_long(0).unwrap() < *bar {
+                            if check_in_partition(r) {
                                 data.push(it.next().unwrap());
                             } else {
                                 break;
@@ -132,8 +187,7 @@ pub fn sort_multistage(input_path: &str, sorted_path: &str,  comparator: fn(&Row
     (0..num_part).for_each(|i| row_writer[i].close());
 
     println!("Move intermediate data to the final file '{sorted_path}'");
-    let schema = Arc::new(input.schema().clone());
-    let mut row_writer = RowWriteBuffer::new(&sorted_path, schema, 10000).unwrap();
+    let mut row_writer = RowWriteBuffer::new(&sorted_path, Arc::clone(&schema), 10000).unwrap();
 
     interm_paths.iter()
         .for_each(|interm_path| {
