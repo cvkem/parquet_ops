@@ -241,7 +241,7 @@ pub mod tests {
         row_writer.close();
 
         println!("Now open the file {path} and read it again");
-        let result = rowiterext::read_parquet_rowiter(path, Some(10), MESSAGE_TYPE);
+        let result = rowiterext::read_rows(path, Some(10), MESSAGE_TYPE);
 
         println!("Result of read: {}", result[0]);
         let output_tuples: Vec<(i64, String)> = result
