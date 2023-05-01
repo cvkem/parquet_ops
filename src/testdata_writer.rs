@@ -17,6 +17,7 @@ pub fn write_parquet(
     num_recs: Option<u64>,
     group_size: Option<u64>,
     selection: Option<fn(&u64) -> bool>,
+    ordered: bool,
 ) -> Result<(), io::Error> {
     let now = Instant::now();
 
@@ -56,10 +57,10 @@ pub fn write_parquet(
         } else {
             match &mut pw {
                 ParquetWriter::FileWriter(ref mut writer) => {
-                    write_parquet_row_group(writer, start, group_end, selection)
+                    write_parquet_row_group(writer, start, group_end, selection, ordered)
                 }
                 ParquetWriter::S3Writer(ref mut writer) => {
-                    write_parquet_row_group(writer, start, group_end, selection)
+                    write_parquet_row_group(writer, start, group_end, selection, ordered)
                 }
             }
         }
@@ -179,11 +180,13 @@ fn write_parquet_row_group_nested<W: io::Write>(
     row_group_writer.close().unwrap();
 }
 
+
 fn write_parquet_row_group<W: io::Write>(
     writer: &mut SerializedFileWriter<W>,
     start: u64,
     end: u64,
     selection: Option<fn(&u64) -> bool>,
+    ordered: bool,
 ) {
     let mut row_group_writer = writer.next_row_group().unwrap();
     let mut col_nr = 0;
@@ -191,7 +194,15 @@ fn write_parquet_row_group<W: io::Write>(
 
     while let Some(mut col_writer) = row_group_writer.next_column().unwrap() {
         // ... write values to a column writer
-        let rec_ids = (start..end).filter(selection);
+//        let reorder: Box<impl Fn(u64) -> u64> = if UNORDERED_RG {
+        let reorder = |i| {
+            if !ordered {
+                ((i -start) * 13) % (end-start) + start
+            } else {
+                i
+            }
+        };
+        let rec_ids = (start..end).map(reorder).filter(selection);
 
         match col_nr {
             0 => {

@@ -127,7 +127,7 @@ pub fn read_rows(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec
 pub fn read_rows_stepped(path: &str, step_size: usize, message_type: &str) -> Vec<Row> {
     let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
 
-    res.step(step_size).collect()
+    res.step_by(step_size).collect()
 }
 
 /// run over a parquet row_iter and read all rows up to a maximum and return these as a vector with step-size applied.

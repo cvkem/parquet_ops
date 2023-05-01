@@ -73,7 +73,7 @@ fn the_merge(path_1: &str, path_2: &str, merged_path: &str) {
     );
 }
 
-const DEFAULT_ACTION: &str = "s3"; // "local"
+const DEFAULT_STORE: &str = "s3"; // "local"
 
 // #[tokio::main]
 // async fn main() {
@@ -85,10 +85,10 @@ fn main() {
     let mut args = env::args();
     println!("Program name = {}", args.next().unwrap());
     println!("Works on local files, unless you provide argument 's3' as first argument, as it operates on bucket 'parquet-exp' in s3.");
-    let action = args.next().unwrap_or(DEFAULT_ACTION.to_owned());
+    let store = args.next().unwrap_or(DEFAULT_STORE.to_owned());
 
     let current_merge = the_merge;
-    if action == "s3" {
+    if store == "s3" {
         //         let rt = tokio::runtime::Builder::new_multi_thread()
         //             .enable_all()
         // //            .thread_name("CvK-tokio-merge")
