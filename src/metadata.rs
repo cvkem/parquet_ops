@@ -1,22 +1,16 @@
-use std::{ 
-    any::type_name,
-    sync::Arc
-};
 use parquet::{
+    basic::ConvertedType,
     file::metadata::ParquetMetaData,
-    schema::types::{Type, BasicTypeInfo}, 
-    basic::ConvertedType
+    schema::types::{BasicTypeInfo, Type},
 };
+use std::{any::type_name, sync::Arc};
 
 use crate::parquet_reader::get_parquet_reader;
-
 
 // return the type of a ref as a static string
 fn type_of<T>(_: &T) -> &'static str {
     type_name::<T>()
 }
-
-
 
 const SHOW_FIRST_GROUP_ONLY: bool = true;
 
@@ -33,12 +27,14 @@ fn print_schema(schema: &Type) {
             }
         };
         let phys_type = fld.get_physical_type();
-        println!("\t\tidx={} {}: {}{}\n\t\t\tbasic_type={:?}", &idx, &nme, &phys_type, &conversion, basic_info);
+        println!(
+            "\t\tidx={} {}: {}{}\n\t\t\tbasic_type={:?}",
+            &idx, &nme, &phys_type, &conversion, basic_info
+        );
     }
 }
 
-
-/// Return a clone of the metadata of a reader at a 
+/// Return a clone of the metadata of a reader at a
 pub fn get_parquet_metadata(path: &str) -> ParquetMetaData {
     // meta-data is the full set of meta-data, which falls apart in:
     //  *  file metadata, which includes:
@@ -48,8 +44,6 @@ pub fn get_parquet_metadata(path: &str) -> ParquetMetaData {
     get_parquet_reader(path).metadata()
 }
 
-
-
 /// Show the metadata on the console.
 pub fn show_parquet_metadata(parquet_metadata: &ParquetMetaData) {
     let file_metadata = parquet_metadata.file_metadata();
@@ -57,9 +51,15 @@ pub fn show_parquet_metadata(parquet_metadata: &ParquetMetaData) {
     println!("\tversion = {}", file_metadata.version());
     println!("\tnum_rows = {}", file_metadata.num_rows());
     println!("\tcreated_by = {:?}", file_metadata.created_by());
-    println!("\tkey_value_metadata = {:?}", file_metadata.key_value_metadata());
+    println!(
+        "\tkey_value_metadata = {:?}",
+        file_metadata.key_value_metadata()
+    );
     println!("\tcolumn = {:?}", file_metadata.column_orders());
-    println!("\tschema_descr: (only contains rootschema with name {} and nested the full schema ", file_metadata.schema_descr().root_schema().name());
+    println!(
+        "\tschema_descr: (only contains rootschema with name {} and nested the full schema ",
+        file_metadata.schema_descr().root_schema().name()
+    );
     print_schema(file_metadata.schema());
 
     println!("\nNow showing the RowGroups");
@@ -67,7 +67,10 @@ pub fn show_parquet_metadata(parquet_metadata: &ParquetMetaData) {
     for (idx, rg) in parquet_metadata.row_groups().iter().enumerate() {
         println!("  rowgroup: {} has meta {:#?}", idx, rg);
         if SHOW_FIRST_GROUP_ONLY {
-            println!("\nFile contains {} row_groups in total, but only first shown.", parquet_metadata.row_groups().len());
+            println!(
+                "\nFile contains {} row_groups in total, but only first shown.",
+                parquet_metadata.row_groups().len()
+            );
             break;
         }
     }
@@ -75,10 +78,8 @@ pub fn show_parquet_metadata(parquet_metadata: &ParquetMetaData) {
     // let fields = parquet_metadata.file_metadata().schema().get_fields();
 }
 
-
-
-type FFAResType = (usize, Vec<(usize, Arc<Type>)>); 
-type FFResType = (usize, Arc<Type>); 
+type FFAResType = (usize, Vec<(usize, Arc<Type>)>);
+type FFResType = (usize, Arc<Type>);
 
 // Auxiliary function to cleanly handle nested structures.
 fn find_field_aux(group: Arc<Type>, field_name: &str, state: FFAResType) -> FFAResType {
@@ -87,14 +88,14 @@ fn find_field_aux(group: Arc<Type>, field_name: &str, state: FFAResType) -> FFAR
         .iter()
         .fold(state, |(idx, mut res), tpe| {
             match **tpe {
-                Type::GroupType{..} => {
+                Type::GroupType { .. } => {
                     // processing to go one level deeper
                     find_field_aux(Arc::clone(tpe), field_name, (idx, res))
-                },
-                Type::PrimitiveType{..} => {
+                }
+                Type::PrimitiveType { .. } => {
                     if field_name == tpe.get_basic_info().name() {
                         res.push((idx, Arc::clone(tpe)));
-                    };        
+                    };
                     (idx + 1, res)
                 }
             }
@@ -109,17 +110,15 @@ pub fn find_field(schema: Arc<Type>, field_name: &str) -> FFResType {
     match results.len() {
         0 => panic!("Failed to find a field with name: '{field_name}'"),
         1 => return results.pop().unwrap(),
-        num => panic!("Obtained multiple results {num} for name: '{field_name}'.")
+        num => panic!("Obtained multiple results {num} for name: '{field_name}'."),
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use crate::metadata::find_field;
-    use std::sync::Arc;
     use parquet::schema::parser::parse_message_type;
-
+    use std::sync::Arc;
 
     #[test]
     fn test_find_field() {
@@ -130,7 +129,7 @@ mod tests {
             REQUIRED INT32 amount;
             REQUIRED INT64 datetime (TIMESTAMP(MILLIS,true));
             REQUIRED BINARY extra_00 (UTF8);} 
-        ";;
+        ";
         let schema = Arc::new(parse_message_type(msg_type).unwrap());
 
         let (idx, tpe) = find_field(schema.clone(), "account");
@@ -143,7 +142,6 @@ mod tests {
         println!("the selected type = {tpe:?}");
         assert_eq!(idx, 3);
     }
-
 
     #[test]
     fn test_find_field_nested() {
@@ -169,7 +167,4 @@ mod tests {
         println!("the selected type = {tpe:?}");
         assert_eq!(idx, 3);
     }
-
-
-
 }

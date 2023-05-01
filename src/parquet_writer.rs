@@ -1,32 +1,24 @@
-
-
-use std::{ 
-    fs,
-    io,
-    path::Path, 
-    sync::Arc};
 use parquet::{
     basic::Compression,
-    file::{
-        properties::WriterProperties,
-        writer::SerializedFileWriter,
-    },
-    schema::types::Type
+    file::{properties::WriterProperties, writer::SerializedFileWriter},
+    schema::types::Type,
 };
 use s3_file::S3Writer;
-
+use std::{fs, io, path::Path, sync::Arc};
 
 pub enum ParquetWriter {
     FileWriter(SerializedFileWriter<io::BufWriter<fs::File>>),
-    S3Writer(SerializedFileWriter<S3Writer>)
+    S3Writer(SerializedFileWriter<S3Writer>),
 }
 
 /// Parse the string and return a ParquetWriter with the corresponding type.
 pub fn get_parquet_writer(path: &str, schema: Arc<Type>) -> ParquetWriter {
     // TODO: at this location we are still tightly lined to the test-types (ttypes)
-    let props = Arc::new(WriterProperties::builder()
-        .set_compression(Compression::SNAPPY)
-        .build());
+    let props = Arc::new(
+        WriterProperties::builder()
+            .set_compression(Compression::SNAPPY)
+            .build(),
+    );
 
     let parts: Vec<&str> = path.split(":").collect();
     match parts.len() {
