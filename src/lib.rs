@@ -5,7 +5,7 @@ pub use self::{
     merge::{merge_parquet, merge_parquet_fake},
     //legacy_writer::write_parquet,
     testdata_writer::write_parquet,
-    metadata::{get_parquet_metadata, show_parquet_metadata},
+    metadata::{get_parquet_metadata, show_parquet_metadata, find_field},
     sort::{sort, sort_multistage},
     ttypes::{MESSAGE_TYPE, ACCOUNT_ONLY_TYPE, ID_ONLY_TYPE},
     rowwritebuffer::RowWriteBuffer

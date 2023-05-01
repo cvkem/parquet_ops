@@ -1,15 +1,11 @@
 use std::{ 
     any::type_name,
-    fs,
-    path::Path, 
+    sync::Arc
 };
 use parquet::{
-    file::{
-        reader::SerializedFileReader,
-        reader::FileReader, 
-        metadata::ParquetMetaData
-    },
-    schema::types::Type, basic::ConvertedType
+    file::metadata::ParquetMetaData,
+    schema::types::{Type, BasicTypeInfo}, 
+    basic::ConvertedType
 };
 
 use crate::parquet_reader::get_parquet_reader;
@@ -77,4 +73,103 @@ pub fn show_parquet_metadata(parquet_metadata: &ParquetMetaData) {
     }
 
     // let fields = parquet_metadata.file_metadata().schema().get_fields();
+}
+
+
+
+type FFAResType = (usize, Vec<(usize, Arc<Type>)>); 
+type FFResType = (usize, Arc<Type>); 
+
+// Auxiliary function to cleanly handle nested structures.
+fn find_field_aux(group: Arc<Type>, field_name: &str, state: FFAResType) -> FFAResType {
+    group
+        .get_fields()
+        .iter()
+        .fold(state, |(idx, mut res), tpe| {
+            match **tpe {
+                Type::GroupType{..} => {
+                    // processing to go one level deeper
+                    find_field_aux(Arc::clone(tpe), field_name, (idx, res))
+                },
+                Type::PrimitiveType{..} => {
+                    if field_name == tpe.get_basic_info().name() {
+                        res.push((idx, Arc::clone(tpe)));
+                    };        
+                    (idx + 1, res)
+                }
+            }
+        })
+}
+
+// Find a field in the schema based on the names. For nested names we do not parse the full path, but only the name of the leaf.
+// In case the field_name occurs multiple times, for example in nested fields or when the field_name does not exist the function panics.
+pub fn find_field(schema: Arc<Type>, field_name: &str) -> FFResType {
+    let (_, mut results) = find_field_aux(schema, field_name, (0, Vec::new()));
+
+    match results.len() {
+        0 => panic!("Failed to find a field with name: '{field_name}'"),
+        1 => return results.pop().unwrap(),
+        num => panic!("Obtained multiple results {num} for name: '{field_name}'.")
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::metadata::find_field;
+    use std::sync::Arc;
+    use parquet::schema::parser::parse_message_type;
+
+
+    #[test]
+    fn test_find_field() {
+        let msg_type = "
+        message schema {
+            REQUIRED INT64 id;
+            REQUIRED BINARY account (UTF8);
+            REQUIRED INT32 amount;
+            REQUIRED INT64 datetime (TIMESTAMP(MILLIS,true));
+            REQUIRED BINARY extra_00 (UTF8);} 
+        ";;
+        let schema = Arc::new(parse_message_type(msg_type).unwrap());
+
+        let (idx, tpe) = find_field(schema.clone(), "account");
+
+        println!("the selected type = {tpe:?}");
+        assert_eq!(idx, 1);
+
+        let (idx, tpe) = find_field(schema, "datetime");
+
+        println!("the selected type = {tpe:?}");
+        assert_eq!(idx, 3);
+    }
+
+
+    #[test]
+    fn test_find_field_nested() {
+        let msg_type = "
+        message schema {
+            REQUIRED INT64 id;
+            REQUIRED GROUP nested_rec {
+                REQUIRED BINARY account (UTF8);
+                REQUIRED INT32 amount;
+            }
+            REQUIRED INT64 datetime (TIMESTAMP(MILLIS,true));
+            REQUIRED BINARY extra_00 (UTF8);} 
+        ";
+        let schema = Arc::new(parse_message_type(msg_type).unwrap());
+
+        let (idx, tpe) = find_field(Arc::clone(&schema), "account");
+
+        println!("the selected type = {tpe:?}");
+        assert_eq!(idx, 1);
+
+        let (idx, tpe) = find_field(schema, "datetime");
+
+        println!("the selected type = {tpe:?}");
+        assert_eq!(idx, 3);
+    }
+
+
+
 }
