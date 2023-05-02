@@ -25,14 +25,14 @@ fn main() {
 
 
     let (path_1, path_2) = if store == "s3" {
-        (paths::PATH_1.to_owned(), paths::PATH_2.to_owned())
-    } else {
         let rewrite_s3 = |p: &str| {
             let mut s = "s3:parquet-exp:".to_owned();
             s.push_str(&p[2..]);
             s.to_owned()
         };
         (rewrite_s3(paths::PATH_1), rewrite_s3(paths::PATH_2))
+    } else {
+        (paths::PATH_1.to_owned(), paths::PATH_2.to_owned())
     };
 
     let num_recs = args.next().map(|s| get_u64_from_string(&s, "first argument should be 'num_recs' (a positive integer)."));
@@ -89,14 +89,16 @@ fn main() {
 
     println!("Action '{}' with duration {:?}", &action, &elapsed);
 
-    // restructure to check output file of merge (not created yet)
-    let mut bytes = [0_u8; 10];
-    if let Err(err) = fs::File::open(&path_1).unwrap().read(&mut bytes) {
-        println!("Failed to open {path_1:?}. Obtained error: {err}");
+    if store != "s3" {
+        // restructure to check output file of merge (not created yet)
+        let mut bytes = [0_u8; 10];
+        if let Err(err) = fs::File::open(&path_1).unwrap().read(&mut bytes) {
+            println!("Failed to open {path_1:?}. Obtained error: {err}");
+        };
+        assert_eq!(&bytes[0..4], &[b'P', b'A', b'R', b'1']);
+        println!(
+            "First 10 bytes are: {:?}",
+            std::str::from_utf8(&bytes[0..7])
+        );
     };
-    assert_eq!(&bytes[0..4], &[b'P', b'A', b'R', b'1']);
-    println!(
-        "First 10 bytes are: {:?}",
-        std::str::from_utf8(&bytes[0..7])
-    );
 }
