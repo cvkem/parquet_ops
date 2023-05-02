@@ -40,31 +40,6 @@ fn main() {
     let num_extra_columns = args.next()
         .map_or(DEFAULT_NUM_EXTRA_COLUMNS, |s| get_u64_from_string(&s, "Third argument should be 'num_extra_columns' (a positive integer)."))  as usize;
     let ordered = args.next().map_or(true, |s| s.to_uppercase() == "Y");
-    // let num_recs = if args.len() > 1 {
-    //     get_u64_from_string(
-    //         &args[1],
-    //         "first argument should be 'num_recs' (a positive integer).",
-    //     )
-    // } else {
-    //     None
-    // };
-    // let group_size = if args.len() > 2 {
-    //     get_u64_from_string(
-    //         &args[2],
-    //         "Second argument should be 'group_size' (a positive integer).",
-    //     )
-    // } else {
-    //     None
-    // };
-    // let num_extra_columns = if args.len() > 3 {
-    //     get_u64_from_string(
-    //         &args[3],
-    //         "Third argument should be 'num_extra_columns' (a positive integer).",
-    //     )
-    //     .unwrap()
-    // } else {
-    //     DEFAULT_NUM_EXTRA_COLUMNS
-    // } as usize;
 
     assert!(
         num_extra_columns < 1000,
