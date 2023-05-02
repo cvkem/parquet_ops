@@ -1,14 +1,11 @@
 use itertools::Itertools;
 use parquet::{
-    basic::Type as PrimType,
+    basic::Type as PhysType,
     record::{Row, RowAccessor},
+    schema::types::Type,
 };
-use std::{cmp::Ordering, marker::PhantomData, sync::Arc};
-
+use std::{cmp::Ordering, sync::Arc};
 use crate::{rowiterext::read_row_sample, find_field};
-
-//use crate::{ACCOUNT_ONLY_TYPE, ID_ONLY_TYPE};
-
 use super::rowiterext::RowIterExt;
 use super::rowwritebuffer::RowWriteBuffer;
 
@@ -36,87 +33,72 @@ pub fn sort(input_path: &str, sorted_path: &str, comparator: fn(&Row, &Row) -> O
 }
 
 pub trait sort_multistage_typed {
-    type Output;
-    fn get_key_partition_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output>;
-    fn get_key_record_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output>;
+    fn get_partition_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering>;
+    fn get_record_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering>;
     fn get_partition_filter_fn(&self, partition_row: &Row) -> Box<dyn Fn(&Row) -> bool>;
     fn get_partition_message_schema(&self) -> String;
 }
 
-struct ParquetKey_i32 {
+struct ParquetKey {
     name: String,
-    col: usize,
+    sort_col: usize,
+    phys_type: PhysType,
 }
 
-impl ParquetKey_i32 {
-    fn new(name: String, col: usize) -> Self {
-        Self{col, name}
+impl ParquetKey {
+    fn new(name: String, schema: Arc<Type>) -> Self {
+        let (sort_col, tpe) = find_field(schema, &name);
+        let phys_type = tpe.get_physical_type();
+
+        Self{name, sort_col, phys_type}
     }
 }
 
-impl sort_multistage_typed for ParquetKey_i32 {
-    type Output = i32;
-    fn get_key_partition_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
-        Box::new(|row: &Row| row.get_int(0).unwrap())
+impl sort_multistage_typed for ParquetKey {
+    fn get_partition_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering> {
+        match self.phys_type {
+            PhysType::INT64 => Box::new(|left: &Row, right: &Row| left.get_long(0).unwrap().cmp(&right.get_long(0).unwrap())),
+            PhysType::INT32 => Box::new(|left: &Row, right: &Row| left.get_int(0).unwrap().cmp(&right.get_int(0).unwrap())),
+            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+        }
     }
 
-    fn get_key_record_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
-        let col = self.col;
-        Box::new(move |row: &Row| row.get_int(col).unwrap())
+    fn get_record_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering> {
+        let col = self.sort_col;
+        match self.phys_type {
+            PhysType::INT64 => Box::new(move |left: &Row, right: &Row| left.get_long(col).unwrap().cmp(&right.get_long(col).unwrap())),
+            PhysType::INT32 => Box::new(move |left: &Row, right: &Row| left.get_int(col).unwrap().cmp(&right.get_int(col).unwrap())),
+            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+        }
     }
 
     fn get_partition_filter_fn(&self, partition_row: &Row) -> Box<dyn Fn(&Row) -> bool> {
-        let partition_value = self.get_key_partition_fn()(partition_row);
-        let get_key = self.get_key_record_fn();
-        Box::new(move |row: &Row| get_key(row) <= partition_value)
+        match self.phys_type {
+            PhysType::INT64 => {
+                let col = self.sort_col;
+                let upper_bound = partition_row.get_long(col).unwrap();
+                Box::new(move|row: &Row| row.get_long(col).unwrap() <= upper_bound)},
+            PhysType::INT32 => {
+                let col = self.sort_col;
+                let upper_bound = partition_row.get_int(col).unwrap();
+                Box::new(move|row: &Row| row.get_int(col).unwrap() <= upper_bound)},
+            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+        }
     }
 
     fn get_partition_message_schema(&self) -> String {
+        let type_label = match self.phys_type {
+            PhysType::INT64 => "INT64",
+            PhysType::INT32 => "INT32",
+            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+        };
+        
         format!("
         message schema {{
-          REQUIRED INT32 {};
+          REQUIRED {type_label} {};
         }}", self.name)
     }
 }
-
-
-struct ParquetKey_i64 {
-    name: String,
-    col: usize,
-}
-
-impl ParquetKey_i64 {
-    fn new(name: String, col: usize) -> Self {
-        Self{col, name}
-    }
-}
-
-impl sort_multistage_typed for ParquetKey_i64 {
-    type Output = i64;
-    fn get_key_partition_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
-        Box::new(|row: &Row| row.get_long(0).unwrap())
-    }
-
-    fn get_key_record_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
-        let col = self.col;
-        Box::new(move |row: &Row| row.get_long(col).unwrap())
-    }
-
-    fn get_partition_filter_fn(&self, partition_row: &Row) -> Box<dyn Fn(&Row) -> bool> {
-        let partition_value = self.get_key_partition_fn()(partition_row);
-        let get_key = self.get_key_record_fn();
-        Box::new(move |row: &Row| get_key(row) <= partition_value)
-    }
-
-    fn get_partition_message_schema(&self) -> String {
-        format!("
-        message schema {{
-          REQUIRED INT64 {};
-        }}", self.name)
-    }
-}
-
-
 
 /// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged.
 pub fn sort_multistage(
@@ -129,29 +111,13 @@ pub fn sort_multistage(
     assert!(input.head().is_some());
     let schema = Arc::new(input.schema().clone());
 
-    let (col_idx, tpe) = find_field(Arc::clone(&schema), sort_field_name);
+    let parquet_key = ParquetKey::new(sort_field_name.to_owned(), Arc::clone(&schema));
 
-    println!(" col_idx={col_idx} and type = {tpe:?}");
-    // breaks down as I can not store an interface in a variable (see: rustc --explain E0562)
-    // this code fails!!
-    let key_interface: impl sort_multistage_typed = match tpe.get_physical_type() {
-        PrimType::INT64 => ParquetKey_i64::new(sort_field_name.to_owned(), col_idx),
-        PrimType::INT32 => ParquetKey_i32::new(sort_field_name.to_owned(), col_idx),
-        other =>  panic!("columns of type {other} are not supported (yet)!")
-    };
-
-//    println!("#####\nSchema = {:#?}\n###", schema);
-
-//    let single_column_message_type = ID_ONLY_TYPE; // to be moved to interface-trait
-    let single_column_message_type = key_interface.get_partition_message_schema();
+    let single_column_message_type = parquet_key.get_partition_message_schema();
                                                    // row 'account' should be flexible.
     let mut sample = read_row_sample(input_path, 1000, &single_column_message_type);
-    // .iter()
-    // .map(|r| r.get_long(0).unwrap().to_owned())
-    // .collect::<Vec<_>>();
-//    let sort_key = |r: &Row| r.get_long(0).unwrap().to_owned(); // to be moved to interface-trait
-    let sort_key = key_interface.get_key_partition_fn();
-    sample.sort_unstable_by_key(sort_key);
+
+    sample.sort_unstable_by(parquet_key.get_partition_compare_fn());
     let num_part = 3;
     let step_size = sample.len() / (num_part - 1);
     let partition = sample
@@ -161,13 +127,7 @@ pub fn sort_multistage(
         .collect::<Vec<_>>();
 
     let base_path_stage_1 = sorted_path.to_owned() + ".intermediate";
-    // let mut row_writer = Vec::new();
-    // for i in 0..num_part {
-    //     let path = format!("{}-{}", path_stage_1, i);
-    //     let schema = Arc::new(input.schema().clone());
-    //     let mut row_writer_elem = RowWriteBuffer::new(&path, schema, 10000).unwrap();
-    //     row_writer.push(row_writer_elem);
-    // };
+
     let interm_paths: Vec<_> = (0..num_part)
         .map(|i| format!("{}-{}", base_path_stage_1, i))
         .collect();
@@ -178,7 +138,7 @@ pub fn sort_multistage(
 
     println!("Enter phase-1: writing to intermedidate file(s) {base_path_stage_1}.<N>");
     while let Some(mut data) = input.take(MAX_SORT_BLOCK) {
-        data.sort_by_key(key_interface.get_key_record_fn()); // to be moved to interface-trait (or use sort_by_key)
+        data.sort_by(parquet_key.get_record_compare_fn()); 
         println!("Retrieved {} rows from input-file", data.len());
 
         let mut i: usize = 0; // skip first field as it is the lowest value and thus seems to be a zero-partition ??
@@ -192,14 +152,8 @@ pub fn sort_multistage(
                 }; // early termination as end of iterator is flagged.
 
                 let data: Vec<_> = if i < partition.len() {
-                    let check_in_partition = key_interface.get_partition_filter_fn(&partition[i]);
-                    //     let check_in_partition = {
-                    //         // to be moved to interface-trait
-                    //     let bar = partition[i].get_long(0).unwrap();
-                    //     println!("{i}:  Create batch for upper bound {bar}");
-                    //     move |r: &Row| r.get_long(0).unwrap() < bar
-                    // };
-                    // using it.take_while(..) does not work, as it loses the first item of the next partition.
+                    let check_in_partition = parquet_key.get_partition_filter_fn(&partition[i]);
+                    // Using iter.take_while(..) does not work, as it loses the first item of the next partition.
                     // so we implement this alternative
                     let mut data = Vec::new();
                     while let Some(r) = it.peek() {
@@ -242,12 +196,11 @@ pub fn sort_multistage(
 
     interm_paths.iter().for_each(|interm_path| {
         let mut input = RowIterExt::new(interm_path);
-        assert!(input.head().is_some());
         let Some(mut data) = input.take(u64::MAX) else {
                 println!("The file '{interm_path}' contains no data-rows.");
                 return;
             };
-            data.sort_by_key(key_interface.get_key_record_fn()); // to be moved to interface-trait (or use sort_by_key)
+        data.sort_by(parquet_key.get_record_compare_fn());
         row_writer.append_row_group(data);
     });
     row_writer.close();

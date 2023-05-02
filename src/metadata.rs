@@ -1,7 +1,7 @@
 use parquet::{
     basic::ConvertedType,
     file::metadata::ParquetMetaData,
-    schema::types::{BasicTypeInfo, Type},
+    schema::types::Type,
 };
 use std::{any::type_name, sync::Arc};
 
