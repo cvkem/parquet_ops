@@ -35,48 +35,52 @@ pub fn sort(input_path: &str, sorted_path: &str, comparator: fn(&Row, &Row) -> O
     row_writer.close();
 }
 
-// pub trait sort_multistage_typed {
-//     type Tpe;
-//     fn get_value(&self, row: &Row) -> Self::Tpe;
-//     fn comparator(left: &Row, right: &Row) -> Ordering;
+pub trait sort_multistage_typed {
+    type Output;
+    fn get_key_partition_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output>;
+    fn get_key_record_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output>;
+    fn get_partition_filter_fn(&self, partition_row: &Row) -> Box<dyn Fn(&Row) -> bool>;
+    fn get_partition_message_schema(&self) -> String;
+}
 
-// //    fn comparator(left: &Row, right: &Row) -> Ordering;
-//     fn sort(&self);
-// }
+struct ParquetKey_i32 {
+    col: usize,
+    name: String,
+}
 
-// struct sort_ms_typed<T>{
-//     field_name: String,
-//     field_idx: usize,
-//     schema: Parquet_type,
-//     sorted_path: String,
-//     phantom: PhantomData<T>
-// }
+impl ParquetKey_i32 {
+    fn new(col: usize, name: String) -> Self {
+        Self{col, name}
+    }
+}
 
-// // impl<T: PartialOrd> sort_multistage_typed for sort_ms_typed<T> {
-// //     type Tpe = T;
+impl sort_multistage_typed for ParquetKey_i32 {
+    type Output = i32;
+    fn get_key_partition_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
+        Box::new(|row: &Row| row.get_int(0).unwrap())
+    }
 
-// //     fn sort (&self) {
+    fn get_key_record_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
+        let col = self.col;
+        Box::new(move |row: &Row| row.get_int(col).unwrap())
+    }
 
-// //     }
+    fn get_partition_filter_fn(&self, partition_row: &Row) -> Box<dyn Fn(&Row) -> bool> {
+        let partition_value = self.get_key_partition_fn()(partition_row);
+        let get_key = self.get_key_record_fn();
+        Box::new(move |row: &Row| get_key(row) <= partition_value)
+    }
 
-// // }
+    fn get_partition_message_schema(&self) -> String {
+        format!("
+        message schema {{
+          REQUIRED INT32 {};
+        }}", self.name)
+    }
+}
 
-// impl<i32> sort_multistage_typed for sort_ms_typed<i32> {
-//     type Tpe = i32;
 
-//     fn sort (&self) {
 
-//     }
-
-//     fn get_value(&self, row: &Row) -> i32 {
-//         123_i32
-//     }
-
-//     fn comparator(left: &Row, right: &Row) -> Ordering {
-//         Ordering::Equal
-//     }
-
-// }
 
 /// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged.
 pub fn sort_multistage(
@@ -155,7 +159,6 @@ pub fn sort_multistage(
                         }
                     }
                     data
-                //                        it.take_while(|r| r.get_long(0).unwrap() <= *bar).collect()
                 } else {
                     ready = true; // flag that next iteration should return None
                     println!("Taking the remaining rows");
