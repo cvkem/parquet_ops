@@ -1,13 +1,13 @@
 use itertools::Itertools;
 use parquet::{
+    basic::Type as PrimType,
     record::{Row, RowAccessor},
-    schema::types::Type as Parquet_type,
 };
 use std::{cmp::Ordering, marker::PhantomData, sync::Arc};
 
-use crate::rowiterext::read_row_sample;
+use crate::{rowiterext::read_row_sample, find_field};
 
-use crate::{ACCOUNT_ONLY_TYPE, ID_ONLY_TYPE};
+//use crate::{ACCOUNT_ONLY_TYPE, ID_ONLY_TYPE};
 
 use super::rowiterext::RowIterExt;
 use super::rowwritebuffer::RowWriteBuffer;
@@ -44,12 +44,12 @@ pub trait sort_multistage_typed {
 }
 
 struct ParquetKey_i32 {
-    col: usize,
     name: String,
+    col: usize,
 }
 
 impl ParquetKey_i32 {
-    fn new(col: usize, name: String) -> Self {
+    fn new(name: String, col: usize) -> Self {
         Self{col, name}
     }
 }
@@ -81,12 +81,12 @@ impl sort_multistage_typed for ParquetKey_i32 {
 
 
 struct ParquetKey_i64 {
-    col: usize,
     name: String,
+    col: usize,
 }
 
 impl ParquetKey_i64 {
-    fn new(col: usize, name: String) -> Self {
+    fn new(name: String, col: usize) -> Self {
         Self{col, name}
     }
 }
@@ -122,22 +122,35 @@ impl sort_multistage_typed for ParquetKey_i64 {
 pub fn sort_multistage(
     input_path: &str,
     sorted_path: &str,
-    comparator: fn(&Row, &Row) -> Ordering,
+    sort_field_name: &str,
 ) {
     // Open reader 'RowIterExt' such that we get access to the schema (and know the file/object is readable)
     let mut input = RowIterExt::new(input_path);
     assert!(input.head().is_some());
     let schema = Arc::new(input.schema().clone());
 
-    println!("#####\nSchema = {:#?}\n###", schema);
+    let (col_idx, tpe) = find_field(Arc::clone(&schema), sort_field_name);
 
-    let single_column_message_type = ID_ONLY_TYPE; // to be moved to interface-trait
+    println!(" col_idx={col_idx} and type = {tpe:?}");
+    // breaks down as I can not store an interface in a variable (see: rustc --explain E0562)
+    // this code fails!!
+    let key_interface: impl sort_multistage_typed = match tpe.get_physical_type() {
+        PrimType::INT64 => ParquetKey_i64::new(sort_field_name.to_owned(), col_idx),
+        PrimType::INT32 => ParquetKey_i32::new(sort_field_name.to_owned(), col_idx),
+        other =>  panic!("columns of type {other} are not supported (yet)!")
+    };
+
+//    println!("#####\nSchema = {:#?}\n###", schema);
+
+//    let single_column_message_type = ID_ONLY_TYPE; // to be moved to interface-trait
+    let single_column_message_type = key_interface.get_partition_message_schema();
                                                    // row 'account' should be flexible.
-    let mut sample = read_row_sample(input_path, 1000, single_column_message_type);
+    let mut sample = read_row_sample(input_path, 1000, &single_column_message_type);
     // .iter()
     // .map(|r| r.get_long(0).unwrap().to_owned())
     // .collect::<Vec<_>>();
-    let sort_key = |r: &Row| r.get_long(0).unwrap().to_owned(); // to be moved to interface-trait
+//    let sort_key = |r: &Row| r.get_long(0).unwrap().to_owned(); // to be moved to interface-trait
+    let sort_key = key_interface.get_key_partition_fn();
     sample.sort_unstable_by_key(sort_key);
     let num_part = 3;
     let step_size = sample.len() / (num_part - 1);
@@ -147,7 +160,7 @@ pub fn sort_multistage(
         //        .step_by(step_size)
         .collect::<Vec<_>>();
 
-    let path_stage_1 = sorted_path.to_owned() + ".intermediate";
+    let base_path_stage_1 = sorted_path.to_owned() + ".intermediate";
     // let mut row_writer = Vec::new();
     // for i in 0..num_part {
     //     let path = format!("{}-{}", path_stage_1, i);
@@ -156,16 +169,17 @@ pub fn sort_multistage(
     //     row_writer.push(row_writer_elem);
     // };
     let interm_paths: Vec<_> = (0..num_part)
-        .map(|i| format!("{}-{}", path_stage_1, i))
+        .map(|i| format!("{}-{}", base_path_stage_1, i))
         .collect();
     let mut row_writer: Vec<_> = interm_paths
         .iter()
         .map(|path| RowWriteBuffer::new(&path, Arc::clone(&schema), 10000).unwrap())
         .collect();
 
-    println!("Enter phase-1: writing to intermedidate file(s) {path_stage_1}");
+    println!("Enter phase-1: writing to intermedidate file(s) {base_path_stage_1}.<N>");
     while let Some(mut data) = input.take(MAX_SORT_BLOCK) {
-        data.sort_by(comparator); // to be moved to interface-trait (or use sort_by_key)
+        data.sort_by_key(key_interface.get_key_record_fn()); // to be moved to interface-trait (or use sort_by_key)
+        println!("Retrieved {} rows from input-file", data.len());
 
         let mut i: usize = 0; // skip first field as it is the lowest value and thus seems to be a zero-partition ??
         let mut ready: bool = false;
@@ -178,12 +192,13 @@ pub fn sort_multistage(
                 }; // early termination as end of iterator is flagged.
 
                 let data: Vec<_> = if i < partition.len() {
-                    let check_in_partition = {
-                        // to be moved to interface-trait
-                        let bar = partition[i].get_long(0).unwrap();
-                        println!("{i}:  Create batch for upper bound {bar}");
-                        move |r: &Row| r.get_long(0).unwrap() < bar
-                    };
+                    let check_in_partition = key_interface.get_partition_filter_fn(&partition[i]);
+                    //     let check_in_partition = {
+                    //         // to be moved to interface-trait
+                    //     let bar = partition[i].get_long(0).unwrap();
+                    //     println!("{i}:  Create batch for upper bound {bar}");
+                    //     move |r: &Row| r.get_long(0).unwrap() < bar
+                    // };
                     // using it.take_while(..) does not work, as it loses the first item of the next partition.
                     // so we implement this alternative
                     let mut data = Vec::new();
@@ -204,7 +219,7 @@ pub fn sort_multistage(
                     };
                     data
                 };
-                println!("collected a dataset of size {}", data.len());
+                println!("partition {i}: collected a dataset of size {}", data.len());
                 // move to next partition
                 let idx = i;
                 i = i + 1;
@@ -218,11 +233,9 @@ pub fn sort_multistage(
             })
     }
 
-    println!("Closing the RowWriteBuffer: {path_stage_1}");
-    // for i in 0..num_part {
-    //     row_writer[i].close();
-    // }
-    (0..num_part).for_each(|i| row_writer[i].close());
+    println!("Closing the RowWriteBuffers for base: {base_path_stage_1}");
+    row_writer.iter_mut()
+        .for_each(|rw| rw.close());
 
     println!("Move intermediate data to the final file '{sorted_path}'");
     let mut row_writer = RowWriteBuffer::new(&sorted_path, Arc::clone(&schema), 10000).unwrap();
@@ -234,7 +247,7 @@ pub fn sort_multistage(
                 println!("The file '{interm_path}' contains no data-rows.");
                 return;
             };
-        data.sort_by(comparator);
+            data.sort_by_key(key_interface.get_key_record_fn()); // to be moved to interface-trait (or use sort_by_key)
         row_writer.append_row_group(data);
     });
     row_writer.close();
