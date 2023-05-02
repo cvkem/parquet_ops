@@ -80,6 +80,42 @@ impl sort_multistage_typed for ParquetKey_i32 {
 }
 
 
+struct ParquetKey_i64 {
+    col: usize,
+    name: String,
+}
+
+impl ParquetKey_i64 {
+    fn new(col: usize, name: String) -> Self {
+        Self{col, name}
+    }
+}
+
+impl sort_multistage_typed for ParquetKey_i64 {
+    type Output = i64;
+    fn get_key_partition_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
+        Box::new(|row: &Row| row.get_long(0).unwrap())
+    }
+
+    fn get_key_record_fn(&self) -> Box<dyn Fn(&Row) -> Self::Output> {
+        let col = self.col;
+        Box::new(move |row: &Row| row.get_long(col).unwrap())
+    }
+
+    fn get_partition_filter_fn(&self, partition_row: &Row) -> Box<dyn Fn(&Row) -> bool> {
+        let partition_value = self.get_key_partition_fn()(partition_row);
+        let get_key = self.get_key_record_fn();
+        Box::new(move |row: &Row| get_key(row) <= partition_value)
+    }
+
+    fn get_partition_message_schema(&self) -> String {
+        format!("
+        message schema {{
+          REQUIRED INT64 {};
+        }}", self.name)
+    }
+}
+
 
 
 /// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged.
