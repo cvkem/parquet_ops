@@ -23,7 +23,6 @@ fn main() {
     println!("Usage: cargo run --example write_2NO <s3|local>  <num_recs>  <group_size>  <num_extra_columns>  <ordered (Y/N)");
     let store = args.next().unwrap_or(DEFAULT_STORE.to_owned());
 
-
     let (path_1, path_2) = if store == "s3" {
         let rewrite_s3 = |p: &str| {
             let mut s = "s3:parquet-exp:".to_owned();
@@ -35,10 +34,24 @@ fn main() {
         (paths::PATH_1.to_owned(), paths::PATH_2.to_owned())
     };
 
-    let num_recs = args.next().map(|s| get_u64_from_string(&s, "first argument should be 'num_recs' (a positive integer)."));
-    let group_size = args.next().map(|s| get_u64_from_string(&s, "Second argument should be 'group_size' (a positive integer)."));
-    let num_extra_columns = args.next()
-        .map_or(DEFAULT_NUM_EXTRA_COLUMNS, |s| get_u64_from_string(&s, "Third argument should be 'num_extra_columns' (a positive integer)."))  as usize;
+    let num_recs = args.next().map(|s| {
+        get_u64_from_string(
+            &s,
+            "first argument should be 'num_recs' (a positive integer).",
+        )
+    });
+    let group_size = args.next().map(|s| {
+        get_u64_from_string(
+            &s,
+            "Second argument should be 'group_size' (a positive integer).",
+        )
+    });
+    let num_extra_columns = args.next().map_or(DEFAULT_NUM_EXTRA_COLUMNS, |s| {
+        get_u64_from_string(
+            &s,
+            "Third argument should be 'num_extra_columns' (a positive integer).",
+        )
+    }) as usize;
     let ordered = args.next().map_or(true, |s| s.to_uppercase() == "Y");
 
     assert!(
@@ -47,7 +60,6 @@ fn main() {
     );
 
     let timer = Instant::now();
-
 
     let num_recs_cpy = num_recs.clone();
     let group_size_cpy = group_size.clone();

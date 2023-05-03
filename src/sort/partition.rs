@@ -1,7 +1,7 @@
-use itertools::Itertools;
+use super::parquet_key::{sort_multistage_typed, ParquetKey};
 use crate::rowiterext::read_row_sample;
+use itertools::Itertools;
 use parquet::record::Row;
-use super::parquet_key::{ParquetKey, sort_multistage_typed};
 
 /// Get a partition over a large dataset
 pub fn partitioning(input_path: &str, parquet_key: &ParquetKey, num_partition: usize) -> Vec<Row> {
@@ -16,5 +16,5 @@ pub fn partitioning(input_path: &str, parquet_key: &ParquetKey, num_partition: u
         .batching(|it| it.skip(step_size - 1).next()) // deterministic step_by that always skips step_size -1 fields before taking the first value
         .collect::<Vec<_>>();
 
-    partition    
+    partition
 }

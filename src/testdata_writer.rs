@@ -7,7 +7,6 @@ use std::{cmp, io, time::Instant};
 use super::parquet_writer::{self, ParquetWriter};
 use super::ttypes;
 
-
 pub fn write_parquet(
     path: &str,
     extra_columns: usize,
@@ -168,15 +167,13 @@ fn write_parquet_row_group_nested<W: io::Write>(
                         None,
                     )
                     .expect("writing i32 column");
-            }
-            //            _ => panic!("incorrect column number")
+            } //            _ => panic!("incorrect column number")
         }
         col_nr += 1;
         col_writer.close().unwrap()
     }
     row_group_writer.close().unwrap();
 }
-
 
 fn write_parquet_row_group<W: io::Write>(
     writer: &mut SerializedFileWriter<W>,
@@ -191,10 +188,10 @@ fn write_parquet_row_group<W: io::Write>(
 
     while let Some(mut col_writer) = row_group_writer.next_column().unwrap() {
         // ... write values to a column writer
-//        let reorder: Box<impl Fn(u64) -> u64> = if UNORDERED_RG {
+        //        let reorder: Box<impl Fn(u64) -> u64> = if UNORDERED_RG {
         let reorder = |i| {
             if !ordered {
-                ((i -start) * 13) % (end-start) + start
+                ((i - start) * 13) % (end - start) + start
             } else {
                 i
             }
@@ -270,8 +267,7 @@ fn write_parquet_row_group<W: io::Write>(
                     //                        .write_batch_with_statistics(&values, None, None, Some(&(values[0])), Some(&(values[values.len()-1])), None) //Some(distinct))
                     .write_batch_with_statistics(&values, None, None, None, None, None) //Some(distinct))
                     .expect("writing String column");
-            }
-            //                _ => panic!("incorrect column number")
+            } //                _ => panic!("incorrect column number")
         }
         col_nr += 1;
         col_writer.close().unwrap()

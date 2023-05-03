@@ -44,7 +44,7 @@ pub fn get_parquet_reader<'a>(path: &'a str) -> ParquetReaderEnum {
             let chunk_reader = S3Reader::new(bucket_name, object_name, 10_000*1024);
 
             let reader = SerializedFileReader::new(chunk_reader).unwrap();
-            ParquetReaderEnum::S3(reader)        
+            ParquetReaderEnum::S3(reader)
         }
         prefix => panic!("get_parquet_iter not implemented for prefix {prefix} of path {path}")
         }

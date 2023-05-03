@@ -1,8 +1,4 @@
-use parquet::{
-    basic::ConvertedType,
-    file::metadata::ParquetMetaData,
-    schema::types::Type,
-};
+use parquet::{basic::ConvertedType, file::metadata::ParquetMetaData, schema::types::Type};
 use std::{any::type_name, sync::Arc};
 
 use crate::parquet_reader::get_parquet_reader;

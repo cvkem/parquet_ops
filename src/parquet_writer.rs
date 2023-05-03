@@ -22,7 +22,7 @@ pub fn get_parquet_writer(path: &str, schema: Arc<Type>) -> ParquetWriter {
 
     let parts: Vec<&str> = path.split(":").collect();
     match parts.len() {
-        1 => { 
+        1 => {
             let path = Path::new(path);
             let file = fs::OpenOptions::new()
                                 .write(true)
@@ -39,12 +39,10 @@ pub fn get_parquet_writer(path: &str, schema: Arc<Type>) -> ParquetWriter {
             let block_size = 10_000_000;
             let bucket_name = parts[1].to_string();
             let object_name = parts[2].to_owned();
-        
+
             let file = s3_file::S3Writer::new(bucket_name, object_name, block_size);
-            
             let writer = SerializedFileWriter::new(file, schema, props).unwrap();
             ParquetWriter::S3Writer(writer)
-        
         },
         _  => panic!("File-path should have no colon (:) or S3-path should have format \"s3:<bucket>:<object_name>\".")
     }

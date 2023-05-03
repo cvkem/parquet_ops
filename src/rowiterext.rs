@@ -118,7 +118,7 @@ pub fn read_rows(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec
 
     get_parquet_iter(path, Some(message_type))
         .unwrap()
-        .0  // value is tuple (rowiter, Type), so take rowiter
+        .0 // value is tuple (rowiter, Type), so take rowiter
         .take(max_rows)
         .collect()
 }

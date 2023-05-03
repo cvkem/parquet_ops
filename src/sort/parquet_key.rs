@@ -1,11 +1,10 @@
+use crate::find_field;
 use parquet::{
     basic::Type as PhysType,
     record::{Row, RowAccessor},
     schema::types::Type,
 };
 use std::{cmp::Ordering, sync::Arc};
-use crate::find_field;
-
 
 pub trait sort_multistage_typed {
     fn get_partition_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering>;
@@ -25,25 +24,39 @@ impl ParquetKey {
         let (sort_col, tpe) = find_field(schema, &name);
         let phys_type = tpe.get_physical_type();
 
-        Self{name, sort_col, phys_type}
+        Self {
+            name,
+            sort_col,
+            phys_type,
+        }
     }
 }
 
 impl sort_multistage_typed for ParquetKey {
     fn get_partition_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering> {
         match self.phys_type {
-            PhysType::INT64 => Box::new(|left: &Row, right: &Row| left.get_long(0).unwrap().cmp(&right.get_long(0).unwrap())),
-            PhysType::INT32 => Box::new(|left: &Row, right: &Row| left.get_int(0).unwrap().cmp(&right.get_int(0).unwrap())),
-            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+            PhysType::INT64 => Box::new(|left: &Row, right: &Row| {
+                left.get_long(0).unwrap().cmp(&right.get_long(0).unwrap())
+            }),
+            PhysType::INT32 => Box::new(|left: &Row, right: &Row| {
+                left.get_int(0).unwrap().cmp(&right.get_int(0).unwrap())
+            }),
+            other => panic!("columns of type '{other}' are not supported (yet)!"),
         }
     }
 
     fn get_record_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering> {
         let col = self.sort_col;
         match self.phys_type {
-            PhysType::INT64 => Box::new(move |left: &Row, right: &Row| left.get_long(col).unwrap().cmp(&right.get_long(col).unwrap())),
-            PhysType::INT32 => Box::new(move |left: &Row, right: &Row| left.get_int(col).unwrap().cmp(&right.get_int(col).unwrap())),
-            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+            PhysType::INT64 => Box::new(move |left: &Row, right: &Row| {
+                left.get_long(col)
+                    .unwrap()
+                    .cmp(&right.get_long(col).unwrap())
+            }),
+            PhysType::INT32 => Box::new(move |left: &Row, right: &Row| {
+                left.get_int(col).unwrap().cmp(&right.get_int(col).unwrap())
+            }),
+            other => panic!("columns of type '{other}' are not supported (yet)!"),
         }
     }
 
@@ -52,12 +65,14 @@ impl sort_multistage_typed for ParquetKey {
             PhysType::INT64 => {
                 let col = self.sort_col;
                 let upper_bound = partition_row.get_long(col).unwrap();
-                Box::new(move|row: &Row| row.get_long(col).unwrap() <= upper_bound)},
+                Box::new(move |row: &Row| row.get_long(col).unwrap() <= upper_bound)
+            }
             PhysType::INT32 => {
                 let col = self.sort_col;
                 let upper_bound = partition_row.get_int(col).unwrap();
-                Box::new(move|row: &Row| row.get_int(col).unwrap() <= upper_bound)},
-            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+                Box::new(move |row: &Row| row.get_int(col).unwrap() <= upper_bound)
+            }
+            other => panic!("columns of type '{other}' are not supported (yet)!"),
         }
     }
 
@@ -65,12 +80,15 @@ impl sort_multistage_typed for ParquetKey {
         let type_label = match self.phys_type {
             PhysType::INT64 => "INT64",
             PhysType::INT32 => "INT32",
-            other =>  panic!("columns of type '{other}' are not supported (yet)!")
+            other => panic!("columns of type '{other}' are not supported (yet)!"),
         };
-        
-        format!("
+
+        format!(
+            "
         message schema {{
           REQUIRED {type_label} {};
-        }}", self.name)
+        }}",
+            self.name
+        )
     }
 }
