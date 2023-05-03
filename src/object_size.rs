@@ -1,14 +1,10 @@
-// use parquet::file::{
-//     metadata::ParquetMetaData,
-//     reader::{FileReader, SerializedFileReader},
-// };
 use s3_file::S3Reader;
 use std::fs;
 use async_bridge;
 
 
 
-/// Create an iterator over the data of a Parquet-file or Parquet S3 object 
+/// Get the object_size in bytes for the file or object represented by 'path'.  
 /// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system.
 pub fn get_object_size(path: &str) -> u64 {
     match path.split(':').next().unwrap() {
@@ -24,7 +20,7 @@ pub fn get_object_size(path: &str) -> u64 {
             let reader = S3Reader::new(bucket_name, object_name, 10_000*1024);
             async_bridge::run_async(reader.get_length()).unwrap()
         }
-        prefix => panic!("get_parquet_iter not implemented for prefix {prefix} of path {path}")
+        prefix => panic!("object_size not implemented for prefix {prefix} of path {path}")
         }
 }
 
