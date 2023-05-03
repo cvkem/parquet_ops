@@ -24,14 +24,14 @@ impl ParquetReaderEnum {
     }
 }
 
-/// create an iterator over the data of a Parquet-file.
+/// Create an iterator over the data of a Parquet-file or Parquet S3 object 
 /// If string is prefixed by 'mem:' this will be an in memory buffer, if is is prefixed by 's3:' it will be a s3-object. Otherswise it will be a path on the local file system.
 pub fn get_parquet_reader<'a>(path: &'a str) -> ParquetReaderEnum {
     // we differentiate at this level for the different types of inputs as lower levels can not handle this more generic
     // as the Associated types are in the way on ChunkReader, and also on SerializedFileReader as it wants to see the generic.
     // handling it at this level introduces some source-code-duplication, but that is manageable.
     match path.split(':').next().unwrap() {
-        prefix if path.len() == prefix.len() => {
+        prefix if path.len() == prefix.len() => { // no prefix, so it is a file
                 let reader = SerializedFileReader::try_from(path.to_owned()).unwrap();
                 ParquetReaderEnum::File(reader)
             }

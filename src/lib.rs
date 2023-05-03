@@ -1,6 +1,7 @@
 pub use self::{
     merge::{merge_parquet, merge_parquet_fake},
     metadata::{find_field, get_parquet_metadata, show_parquet_metadata},
+    object_size::get_object_size,
     rowiterext::ttest::read_parquet_rowiter,
     rowiterext::{get_parquet_iter, read_row_sample, read_rows, read_rows_stepped},
     rowwritebuffer::RowWriteBuffer,
@@ -11,6 +12,7 @@ pub use self::{
 
 mod merge;
 mod metadata;
+mod object_size;
 mod parquet_reader;
 mod parquet_writer;
 mod rowiterext;

@@ -121,7 +121,7 @@ fn sort_ms_stage_2(
                 println!("The file '{interm_path}' contains no data-rows.");
                 return;
             };
-    /// Sorting can be skipped if the case this file/object contins just one row-group (which can be seen from the meta-data)
+    // Sorting can be skipped if the case this file/object contins just one row-group (which can be seen from the meta-data)
     data.sort_by(parquet_key.get_record_compare_fn());
         row_writer.append_row_group(data);
     });
