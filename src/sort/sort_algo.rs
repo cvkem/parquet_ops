@@ -1,8 +1,7 @@
 use itertools::Itertools;
 use parquet::{
-    record::reader::RowIter,
+    record::{Row, RowAccessor},
     schema::types::Type};
-use parquet::record::{Row, RowAccessor};
 use std::{cmp::Ordering, sync::Arc};
 use crate::rowiterext::RowIterExt;
 use crate::rowwritebuffer::RowWriteBuffer;
@@ -12,6 +11,7 @@ use super::partition::partitioning;
 const MAX_SORT_BLOCK: u64 = 1_000_000; //10_000  // 1 in REPORT_APPEND_STEP rows is reported on the console.
 
 /// sort the input (parquet-file) in one pass and writer it to the sorted-path
+/// Internal function: The 'input' iterator is already created by the 'sort' method that selects 'sort_simple' or 'sort_multi_stage'
 pub fn sort_simple(
     mut input: RowIterExt,
     schema: Arc<Type>,
@@ -28,12 +28,12 @@ pub fn sort_simple(
         row_writer.append_row_group(data);
     };
 
-    println!("Closing the RowWriteBuffer  row_writer.close()");
     row_writer.close();
 }
 
 
 /// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged.
+/// Internal function: The 'input' iterator is already created by the 'sort' method that selects 'sort_simple' or 'sort_multi_stage'
 pub fn sort_multistage(
     mut input: RowIterExt,
     schema: Arc<Type>,
@@ -43,18 +43,16 @@ pub fn sort_multistage(
 ) {
     let partition = partitioning(input_path, &parquet_key, 3);
 
-    let base_path_stage_1 = sorted_path.to_owned() + ".intermediate";
-
     let num_row_writer = partition.len()+1;  // Last row_writer is needed to store the tail (N partitions result in N+1 segments.
     let interm_paths: Vec<_> = (0..num_row_writer)
-        .map(|i| format!("{}-{}", base_path_stage_1, i))
+        .map(|i| sorted_path.replace(".parquet", &format!("intermediate-{}.parquet", i)).to_owned())
         .collect();
     let mut row_writer: Vec<_> = interm_paths
         .iter()
         .map(|path| RowWriteBuffer::new(&path, Arc::clone(&schema), 10000).unwrap())
         .collect();
 
-    println!("Enter phase-1: writing to intermedidate file(s) {base_path_stage_1}.<N>");
+    println!("Enter phase-1: writing to intermedidate file(s) {}.<N>", interm_paths[0]);
     while let Some(mut data) = input.take(MAX_SORT_BLOCK) {
         data.sort_by(parquet_key.get_record_compare_fn()); 
         println!("Retrieved {} rows from input-file", data.len());
@@ -105,7 +103,7 @@ pub fn sort_multistage(
             })
     }
 
-    println!("Closing the RowWriteBuffers for base: {base_path_stage_1}");
+    println!("Closing the RowWriteBuffers for base: {}", interm_paths[0].replace('0', "<N>"));
     row_writer.iter_mut()
         .for_each(|rw| rw.close());
 
