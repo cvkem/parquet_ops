@@ -1,4 +1,4 @@
-use super::parquet_key::{sort_multistage_typed, ParquetKey};
+use super::parquet_key::{SortMultistageParquet, ParquetKey};
 use crate::rowiterext::read_row_sample;
 use itertools::Itertools;
 use parquet::record::Row;

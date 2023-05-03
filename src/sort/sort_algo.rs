@@ -1,4 +1,4 @@
-use super::parquet_key::{sort_multistage_typed, ParquetKey};
+use super::parquet_key::{SortMultistageParquet, ParquetKey};
 use super::partition::partitioning;
 use crate::rowiterext::RowIterExt;
 use crate::rowwritebuffer::RowWriteBuffer;

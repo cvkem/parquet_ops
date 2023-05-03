@@ -2,7 +2,7 @@ use super::rowiterext::RowIterExt;
 use std::sync::Arc;
 
 mod parquet_key;
-use parquet_key::{sort_multistage_typed, ParquetKey};
+use parquet_key::{SortMultistageParquet, ParquetKey};
 mod partition;
 mod sort_algo;
 use sort_algo::{sort_multistage, sort_simple};

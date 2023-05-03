@@ -1,12 +1,12 @@
-use crate::find_field;
 use parquet::{
     basic::Type as PhysType,
     record::{Row, RowAccessor},
     schema::types::Type,
 };
 use std::{cmp::Ordering, sync::Arc};
+use crate::find_field;
 
-pub trait sort_multistage_typed {
+pub trait SortMultistageParquet {
     fn get_partition_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering>;
     fn get_record_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering>;
     fn get_partition_filter_fn(&self, partition_row: &Row) -> Box<dyn Fn(&Row) -> bool>;
@@ -32,7 +32,7 @@ impl ParquetKey {
     }
 }
 
-impl sort_multistage_typed for ParquetKey {
+impl SortMultistageParquet for ParquetKey {
     fn get_partition_compare_fn(&self) -> Box<dyn Fn(&Row, &Row) -> Ordering> {
         match self.phys_type {
             PhysType::INT64 => Box::new(|left: &Row, right: &Row| {
