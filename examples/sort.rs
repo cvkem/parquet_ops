@@ -28,7 +28,7 @@ fn main() {
 
     let timer = Instant::now();
 
-    parquet_ops::sort_multistage(path_1, sorted_path, "id");
+    parquet_ops::sort(path_1, sorted_path, "id");
 
     let elapsed = timer.elapsed();
 

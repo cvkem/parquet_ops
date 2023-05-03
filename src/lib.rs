@@ -4,8 +4,7 @@ pub use self::{
     rowiterext::ttest::read_parquet_rowiter,
     rowiterext::{get_parquet_iter, read_row_sample, read_rows, read_rows_stepped},
     rowwritebuffer::RowWriteBuffer,
-    sort::{sort, sort_multistage},
-    //legacy_writer::write_parquet,
+    sort::sort,
     testdata_writer::write_parquet,
     ttypes::{ACCOUNT_ONLY_TYPE, ID_ONLY_TYPE, MESSAGE_TYPE},
 };
