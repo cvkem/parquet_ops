@@ -1,5 +1,4 @@
 use crate::parquet_reader::{get_parquet_reader, ParquetReaderEnum};
-use itertools::Itertools;
 use parquet::{
     record::{reader::RowIter, Row},
     schema::{parser::parse_message_type, types::Type},
@@ -117,9 +116,11 @@ pub fn get_parquet_iter<'a>(
 pub fn read_rows(path: &str, max_rows: Option<usize>, message_type: &str) -> Vec<Row> {
     let max_rows = max_rows.or(Some(1_000_000_000)).unwrap();
 
-    let (res, _) = get_parquet_iter(path, Some(message_type)).unwrap();
-
-    res.collect()
+    get_parquet_iter(path, Some(message_type))
+        .unwrap()
+        .0  // value is tuple (rowiter, Type), so take rowiter
+        .take(max_rows)
+        .collect()
 }
 
 /// run over a parquet row_iter and read rows up to a maximum and return these as a vector with step-size applied.

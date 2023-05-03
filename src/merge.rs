@@ -6,7 +6,7 @@ use super::rowwritebuffer::RowWriteBuffer;
 
 use super::REPORT_APPEND_STEP;
 
-pub fn merge_parquet_fake(paths: Vec<&str>, merged_path: &str, smaller: fn(&Row, &Row) -> bool) {
+pub fn merge_parquet_fake(_paths: Vec<&str>, merged_path: &str, _smaller: fn(&Row, &Row) -> bool) {
     use crate::ttypes::{get_test_schema, test_parquet_row};
 
     let num_extra_columns: i16 = 135;
@@ -73,7 +73,7 @@ pub fn merge_parquet(paths: Vec<&str>, merged_path: &str, smaller: fn(&Row, &Row
     // let mut b3: u64 = 3;
     // let mut b4: u64 = 0;
 
-    let mut report = true;
+    let _report = true;
 
     loop {
         match row_iters.len() {

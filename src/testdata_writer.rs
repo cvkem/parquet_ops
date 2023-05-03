@@ -1,15 +1,12 @@
 use parquet::{
     data_type::{ByteArray, ByteArrayType, Int32Type, Int64Type},
     file::writer::SerializedFileWriter,
-    record::{Row, RowAccessor},
 };
 use std::{cmp, io, time::Instant};
 
-//use super::rowiterext::RowIterExt;
 use super::parquet_writer::{self, ParquetWriter};
-use super::rowwritebuffer::RowWriteBuffer;
 use super::ttypes;
-use super::REPORT_APPEND_STEP;
+
 
 pub fn write_parquet(
     path: &str,

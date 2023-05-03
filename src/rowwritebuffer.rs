@@ -142,11 +142,11 @@ impl RowWriteBuffer {
 impl Drop for RowWriteBuffer {
     fn drop(&mut self) {
         match &self.write_sink {
-            Some(ws) => println!("Write-sink exists"),
+            Some(_ws) => println!("Write-sink exists"),
             None => println!("No write-sink (None)"),
         };
         match &self.writer_handle {
-            Some(wh) => println!("Writer_handle exists"),
+            Some(_wh) => println!("Writer_handle exists"),
             None => println!("No writer_handle (None)"),
         };
     }

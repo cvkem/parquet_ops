@@ -13,7 +13,7 @@ const MAX_SIZE_SIMPLE_SORT: usize = 2_000_000_000;
 /// sort the input in one pass and writer it to the sorted-path
 pub fn sort(input_path: &str, sorted_path: &str, sort_field_name: &str) {
     // Open reader 'RowIterExt' such that we get access to the schema (and know the file/object is readable)
-    let mut input = RowIterExt::new(input_path);
+    let input = RowIterExt::new(input_path);
     assert!(input.head().is_some());
     let schema = Arc::new(input.schema().clone());
 

@@ -222,7 +222,7 @@ fn write_u64_column(
     col_writer: &mut SerializedColumnWriter,
 ) -> Result<()> {
     write_i64_column_aux(rows, col_writer, |row: &Row| {
-        (row.get_ulong(idx).unwrap() as i64)
+        row.get_ulong(idx).unwrap() as i64
     })
 }
 
@@ -232,7 +232,7 @@ fn write_ts_millis_column(
     col_writer: &mut SerializedColumnWriter,
 ) -> Result<()> {
     write_i64_column_aux(rows, col_writer, |row: &Row| {
-        (row.get_timestamp_millis(idx).unwrap() as i64)
+        row.get_timestamp_millis(idx).unwrap() as i64
     })
 }
 
