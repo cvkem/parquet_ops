@@ -33,34 +33,19 @@ pub fn sort_simple(
     row_writer.close();
 }
 
-/// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged.
-/// Internal function: The 'input' iterator is already created by the 'sort' method that selects 'sort_simple' or 'sort_multi_stage'
-pub fn sort_multistage(
+/// Stage-1 of the Multi-stage sort. In this stage all data of the input is split to a set of non-overlapping partitions in separate files/objects.
+/// The intermediate files are soted per row-group, but the file is not sorted across row-groups in the same intermediate file.
+pub fn sort_ms_stage_1(
     mut input: RowIterExt,
+    interm_paths: &Vec<String>,
     schema: Arc<Type>,
-    input_path: &str,
-    sorted_path: &str,
-    parquet_key: ParquetKey,
-) {
-    let partition = partitioning(input_path, &parquet_key, 3);
-
-    let num_row_writer = partition.len() + 1; // Last row_writer is needed to store the tail (N partitions result in N+1 segments.
-    let interm_paths: Vec<_> = (0..num_row_writer)
-        .map(|i| {
-            sorted_path
-                .replace(".parquet", &format!("intermediate-{}.parquet", i))
-                .to_owned()
-        })
-        .collect();
-    let mut row_writer: Vec<_> = interm_paths
+    partition: Vec<Row>,
+    parquet_key: &ParquetKey) {
+        let mut row_writer: Vec<_> = interm_paths
         .iter()
         .map(|path| RowWriteBuffer::new(&path, Arc::clone(&schema), 10000).unwrap())
         .collect();
 
-    println!(
-        "Enter phase-1: writing to intermedidate file(s) {}.<N>",
-        interm_paths[0]
-    );
     while let Some(mut data) = input.take(MAX_SORT_BLOCK) {
         data.sort_by(parquet_key.get_record_compare_fn());
         println!("Retrieved {} rows from input-file", data.len());
@@ -109,15 +94,25 @@ pub fn sort_multistage(
                 println!(" The collected ids are: {ids:?}");
                 row_writer[idx].append_row_group(data)
             })
-    }
+    } 
 
     println!(
         "Closing the RowWriteBuffers for base: {}",
         interm_paths[0].replace('0', "<N>")
     );
     row_writer.iter_mut().for_each(|rw| rw.close());
+}
 
-    println!("Move intermediate data to the final file '{sorted_path}'");
+
+/// Stage-2 of the Multi-stage sort. In this stage all intermediate files/objects are merged to a single outut (file or object).
+/// The intermediate files consists of subsequent partitions. However, these files need to be sorted first as they are not sorted across row-groups 
+/// (As an optimization we could skip the sorting step in case files consist of a single row-group (which can be seen from the meta-data))
+fn sort_ms_stage_2(
+    sorted_path: &str,
+    interm_paths: &Vec<String>,
+    schema: Arc<Type>,
+    parquet_key: &ParquetKey
+) {
     let mut row_writer = RowWriteBuffer::new(&sorted_path, Arc::clone(&schema), 10000).unwrap();
 
     interm_paths.iter().for_each(|interm_path| {
@@ -126,8 +121,39 @@ pub fn sort_multistage(
                 println!("The file '{interm_path}' contains no data-rows.");
                 return;
             };
-        data.sort_by(parquet_key.get_record_compare_fn());
+    /// Sorting can be skipped if the case this file/object contins just one row-group (which can be seen from the meta-data)
+    data.sort_by(parquet_key.get_record_compare_fn());
         row_writer.append_row_group(data);
     });
     row_writer.close();
+}
+
+/// Sort the input in two passes. The first pass returns a file with sorted row-groups. In the second pass these row-groups are merged.
+/// Internal function: The 'input' iterator is already created by the 'sort' method that selects 'sort_simple' or 'sort_multi_stage'
+pub fn sort_multistage(
+    mut input: RowIterExt,
+    schema: Arc<Type>,
+    input_path: &str,
+    sorted_path: &str,
+    parquet_key: ParquetKey,
+) {
+    let partition = partitioning(input_path, &parquet_key, 3);
+
+    let num_row_writer = partition.len() + 1; // Last row_writer is needed to store the tail (N partitions result in N+1 segments.
+    let interm_paths: Vec<_> = (0..num_row_writer)
+        .map(|i| {
+            sorted_path
+                .replace(".parquet", &format!("intermediate-{}.parquet", i))
+                .to_owned()
+        })
+        .collect();
+
+    println!(
+        "Enter phase-1: writing to intermedidate file(s) {}.<N>",
+        interm_paths[0]
+    );    
+    sort_ms_stage_1(input, &interm_paths, Arc::clone(&schema), partition, &parquet_key);
+
+    println!("Move intermediate data to the final file '{sorted_path}'");
+    sort_ms_stage_2(sorted_path, &interm_paths, schema, &parquet_key);
 }
